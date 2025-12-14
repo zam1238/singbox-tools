@@ -731,6 +731,9 @@ install_singbox() {
         return
     fi
     
+    # 清理URL中的任何潜在隐藏字符
+    download_url=$(echo "$download_url" | tr -d '\r\n')
+    
     log_info "开始下载 sing-box: $download_url"
     print_info "开始下载 sing-box..."
     
@@ -745,20 +748,50 @@ install_singbox() {
     local retry_count=0
     local download_success=false
     
+    # 验证URL格式
+    if [[ -z "$download_url" ]]; then
+        log_error "下载URL为空"
+        print_error "下载URL为空"
+        rm -rf "$temp_dir"
+        read -p "按回车键返回主菜单..." dummy
+        show_main_menu
+        return
+    fi
+    
+    # 检查URL是否包含非法字符
+    if [[ "$download_url" =~ [\r\n] ]]; then
+        log_error "下载URL包含非法字符"
+        print_error "下载URL包含非法字符"
+        rm -rf "$temp_dir"
+        read -p "按回车键返回主菜单..." dummy
+        show_main_menu
+        return
+    fi
+    
+    log_debug "验证后的下载URL: $download_url"
+    
     while [[ $retry_count -lt $max_retries ]]; do
         # 首先尝试使用curl下载
-        if curl -L --progress-bar --connect-timeout 30 --max-time 300 "$download_url" -o sing-box.tar.gz; then
+        log_debug "尝试使用curl下载，第$((retry_count+1))次"
+        # 添加--http1.1选项以避免HTTP/2相关问题
+        if curl -L --http1.1 --progress-bar --connect-timeout 30 --max-time 300 "$download_url" -o sing-box.tar.gz; then
             download_success=true
             break
         else
+            log_debug "curl下载失败，退出码: $?"
             # 如果curl失败，尝试使用wget作为备用方案
             if command -v wget &> /dev/null; then
                 log_warn "curl下载失败，尝试使用wget作为备用方案"
                 print_warning "curl下载失败，尝试使用wget作为备用方案"
-                if wget -q --show-progress --timeout=30 --tries=1 "$download_url" -O sing-box.tar.gz; then
+                # 添加更多选项以提高wget的稳定性
+                if wget -q --show-progress --timeout=30 --tries=1 --random-wait "$download_url" -O sing-box.tar.gz; then
                     download_success=true
                     break
+                else
+                    log_debug "wget下载失败，退出码: $?"
                 fi
+            else
+                log_debug "wget命令不可用"
             fi
             
             # 如果两种方法都失败，增加重试计数
