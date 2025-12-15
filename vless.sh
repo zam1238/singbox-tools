@@ -12,6 +12,9 @@
 AUTHOR="LittleDoraemon"
 VERSION="v1.0.3"
 
+# 默认SNI常量
+SNI_DEFAULT="www.yahoo.com"
+
 # 调试模式（可通过环境变量 DEBUG_MODE=true 启用）
 DEBUG_MODE=${DEBUG_MODE:-false}
 
@@ -134,7 +137,7 @@ setup_logging() {
     log_debug "清空日志文件: $LOG_FILE"
     > "$LOG_FILE"
     
-    log_info "开始 sing-box 安装过程"
+    log_info "开始 sing-box 下载并安装过程"
     log_info "脚本版本: $VERSION"
     log_debug "调试模式: $DEBUG_MODE"
     log_debug "日志文件路径: $LOG_FILE"
@@ -174,8 +177,6 @@ check_system() {
         system_check_passed=true
         log_debug "检测到Alpine Linux系统"
         echo -e "${GREEN}${CHECK_MARK}${NC} 系统类型检查: 通过 (Alpine Linux)"
-        log_debug "未识别的操作系统"
-        echo -e "${RED}${CROSS_MARK}${NC} 系统类型检查: 未通过 - 不支持的操作系统"
     fi
     
     # 检测系统架构
@@ -189,7 +190,13 @@ check_system() {
             log_debug "映射到sing-box架构: amd64"
             echo -e "${GREEN}${CHECK_MARK}${NC} 系统架构检查: 通过 (x86_64/amd64)"
             ;;
-        aarch64)
+        'x86' | 'i686' | 'i386')
+            SINGBOX_ARCH="386"
+            arch_check_passed=true
+            log_debug "映射到sing-box架构: 386"
+            echo -e "${GREEN}${CHECK_MARK}${NC} 系统架构检查: 通过 (x86/i686/i386/386)"
+            ;;
+        aarch64 | arm64)
             SINGBOX_ARCH="arm64"
             arch_check_passed=true
             log_debug "映射到sing-box架构: arm64"
@@ -200,6 +207,12 @@ check_system() {
             arch_check_passed=true
             log_debug "映射到sing-box架构: armv7"
             echo -e "${GREEN}${CHECK_MARK}${NC} 系统架构检查: 通过 (armv7l/armv7)"
+            ;;
+        s390x)
+            SINGBOX_ARCH="s390x"
+            arch_check_passed=true
+            log_debug "映射到sing-box架构: s390x"
+            echo -e "${GREEN}${CHECK_MARK}${NC} 系统架构检查: 通过 (s390x)"
             ;;
         *)
             log_debug "不支持的系统架构: $ARCH"
@@ -247,28 +260,34 @@ perform_system_checks() {
     print_blue "==========================================="
     echo ""
     
-    local all_checks_passed=true
+    local failed_checks=0
     
     # 检查Root权限
     log_debug "检查Root权限"
     if ! check_root; then
-        all_checks_passed=false
+        ((failed_checks++))
         log_debug "Root权限检查未通过"
+    else
+        log_debug "Root权限检查通过"
     fi
     
     # 检查系统环境
     log_debug "检查系统环境"
     if ! check_system; then
-        all_checks_passed=false
+        ((failed_checks++))
         log_debug "系统环境检查未通过"
+    else
+        log_debug "系统环境检查通过"
     fi
     
-    # 检查IPv6支持
+    # 检查IPv6支持（非必需检查）
     log_debug "检查IPv6支持"
-    if ! check_ipv6_support; then
+    if check_ipv6_support; then
+        log_debug "系统支持IPv6"
+    else
         print_warning "系统不支持IPv6，将仅使用IPv4"
         log_debug "系统不支持IPv6"
-        log_debug "系统支持IPv6"
+        # IPv6支持不是必需的，因此即使检查失败也不会影响整体检查结果
     fi
     
     # 检查必要的命令
@@ -278,16 +297,17 @@ perform_system_checks() {
         if command -v $cmd &> /dev/null; then
             log_debug "命令检查: $cmd 可用"
             echo -e "${GREEN}${CHECK_MARK}${NC} 命令检查: $cmd 可用"
+        else
             log_debug "命令检查: $cmd 未安装"
             echo -e "${RED}${CROSS_MARK}${NC} 命令检查: $cmd 未安装"
-            all_checks_passed=false
+            ((failed_checks++))
         fi
     done
     
     echo ""
-    if [[ "$all_checks_passed" == true ]]; then
-        log_debug "所有系统检查通过"
-        echo -e "${GREEN}${CHECK_MARK}${NC} 所有系统检查通过"
+    if [[ $failed_checks -eq 0 ]]; then
+        log_debug "所有必需系统检查通过"
+        echo -e "${GREEN}${CHECK_MARK}${NC} 所有必需系统检查通过"
         print_info "系统环境准备就绪，可以继续安装"
     else
         log_debug "系统检查未通过"
@@ -403,12 +423,17 @@ get_user_port() {
 get_user_sni() {
     # 在非交互模式下不执行交互式输入
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
-        echo ""
+        # 在非交互模式下，如果用户没有传入SNI值，则使用默认值
+        if [[ -z "$SNI" ]]; then
+            echo "$SNI_DEFAULT"
+        else
+            echo "$SNI"
+        fi
         return
     fi
     
     local user_sni
-    read -p "请输入SNI域名，或按回车跳过使用默认值(www.yahoo.com): " user_sni
+    read -p "请输入SNI域名，或按回车跳过使用默认值($SNI_DEFAULT): " user_sni
     
     # 如果用户直接按回车，返回空值
     if [[ -z "$user_sni" ]]; then
@@ -500,6 +525,7 @@ configure_singbox() {
     
     # 获取端口参数
     if [[ -n "$PORT" ]]; then
+        # 如果已设置PORT环境变量，直接使用
         log_debug "使用环境变量PORT: $PORT"
         # 检查环境变量指定的端口是否已被占用
         if is_port_in_use $PORT; then
@@ -507,15 +533,16 @@ configure_singbox() {
             log_warn "环境变量指定的端口 $PORT 已被占用，可能存在冲突"
         fi
         CONFIG_PORT=$PORT
-        # 用户交互输入端口
-        print_info "未设置PORT环境变量"
+    else
+        # 如果未设置PORT环境变量，通过交互式输入或其他方式获取
         log_debug "未设置PORT环境变量，进入交互式端口输入"
         user_input_port=$(get_user_port)
         
         if [[ -n "$user_input_port" ]]; then
             CONFIG_PORT=$user_input_port
             log_debug "用户输入端口: $CONFIG_PORT"
-            # 用户放弃输入，随机生成端口
+        else
+            # 用户放弃输入或非交互模式下无输入，随机生成端口
             CONFIG_PORT=$(generate_random_port)
             log_debug "使用随机生成的端口: $CONFIG_PORT"
             print_info "使用随机生成的端口: $CONFIG_PORT"
@@ -524,20 +551,21 @@ configure_singbox() {
     
     # 获取SNI参数
     if [[ -n "$SNI" ]]; then
+        # 如果已设置SNI环境变量，直接使用
         log_debug "使用环境变量SNI: $SNI"
         CONFIG_SNI=$SNI
-        # 用户交互输入SNI
-        print_info "未设置SNI环境变量"
+    else
+        # 如果未设置SNI环境变量，通过交互式输入或其他方式获取
         log_debug "未设置SNI环境变量，进入交互式SNI输入"
         user_input_sni=$(get_user_sni)
         
         if [[ -n "$user_input_sni" ]]; then
             CONFIG_SNI=$user_input_sni
             log_debug "用户输入SNI: $CONFIG_SNI"
-            # 用户放弃输入，使用默认值
-            CONFIG_SNI="www.yahoo.com"
+        else
+            # 用户放弃输入或非交互模式下无输入，使用默认值
+            CONFIG_SNI="$SNI_DEFAULT"
             log_debug "使用默认SNI: $CONFIG_SNI"
-            print_info "使用默认SNI: $CONFIG_SNI"
         fi
     fi
     
@@ -678,33 +706,16 @@ get_singbox_download_url() {
     log_info "sing-box下载URL: $url"
 }
 
-# 安装sing-box
-install_singbox() {
-    log_info "开始安装 sing-box..."
+# 下载并安装sing-box
+download_and_install_singbox() {
+    log_info "开始下载并安装 sing-box..."
     log_debug "当前操作系统: $OS, 架构: $SINGBOX_ARCH"
-    print_info "开始安装 sing-box..."
+    print_info "开始下载并安装 sing-box..."
     
-    # 强制覆盖安装，不检查是否已安装
-    
-    # 获取系统架构
-    local arch_raw=$(uname -m)
-    local arch=""
-    case "${arch_raw}" in
-        'x86_64') arch='amd64' ;;
-        'x86' | 'i686' | 'i386') arch='386' ;;
-        'aarch64' | 'arm64') arch='arm64' ;;
-        'armv7l') arch='armv7' ;;
-        's390x') arch='s390x' ;;
-        *) 
-            log_error "不支持的架构: ${arch_raw}"
-            print_error "不支持的架构: ${arch_raw}"
-            show_main_menu
-            return 1
-            ;;
-    esac
+    # 强制覆盖下载并安装，不检查是否已安装
     
     # 使用更稳定的下载源
-    local download_url="https://${arch}.ssss.nyc.mn/sbx"
+    local download_url="https://${SINGBOX_ARCH}.ssss.nyc.mn/sbx"
     log_info "开始下载 sing-box: $download_url"
     print_info "开始下载 sing-box..."
     
@@ -856,8 +867,8 @@ EOF
         log_info "systemd 服务文件创建完成"
     fi
     
-    log_info "sing-box 安装完成"
-    print_success "sing-box 安装完成"
+    log_info "sing-box 下载并安装完成"
+    print_success "sing-box 下载并安装完成"
     
     print_info "按任意键返回主菜单..."
     read -n 1 -s -r -p ""
@@ -889,7 +900,7 @@ show_main_menu() {
     echo -e "sing-box状态: $([[ "$singbox_installed" == *"已安装"* ]] && echo -e "${GREEN}$singbox_installed${NC}" || echo -e "${RED}$singbox_installed${NC}")"
     echo -e "服务状态: $([[ "$singbox_status" == "运行中" ]] && echo -e "${GREEN}$singbox_status${NC}" || echo -e "${RED}$singbox_status${NC}")"
     echo ""
-    print_green "1. 一键安装sing-box"
+    print_green "1. 一键下载并安装sing-box"
     print_skyblue "------------------"
     print_green "2. 卸载sing-box"
     print_skyblue "------------------"
@@ -1051,15 +1062,15 @@ show_log_menu() {
 
 
 
-# 非交互式安装函数
+# 非交互式下载并安装函数
 non_interactive_install() {
-    log_info "开始非交互式安装sing-box..."
-    log_debug "进入非交互式安装流程"
-    print_info "开始非交互式安装sing-box..."
+    log_info "开始非交互式下载并安装sing-box..."
+    log_debug "进入非交互式下载并安装流程"
+    print_info "开始非交互式下载并安装sing-box..."
     
     # 在非交互模式下，系统检查已经在主函数中完成，这里不再重复检查
-    log_debug "开始安装sing-box"
-    install_singbox
+    log_debug "开始下载并安装sing-box"
+    download_and_install_singbox
     log_debug "开始配置sing-box"
     configure_singbox
     log_debug "开始启动服务"
@@ -1068,8 +1079,8 @@ non_interactive_install() {
     log_debug "显示客户端配置信息"
     show_simple_client_config
     
-    log_info "sing-box非交互式安装完成！"
-    print_info "sing-box非交互式安装完成！"
+    log_info "sing-box非交互式下载并安装完成！"
+    print_info "sing-box非交互式下载并安装完成！"
 }
 
 # 显示简化的客户端配置信息（用于非交互模式）
@@ -1164,15 +1175,15 @@ show_simple_client_config() {
     echo ""
 }
 
-# 主安装流程
+# 主下载并安装流程
 main_install_process() {
-    log_info "开始一键安装sing-box..."
-    log_debug "进入主安装流程"
-    print_info "开始一键安装sing-box..."
+    log_info "开始一键下载并安装sing-box..."
+    log_debug "进入主下载并安装流程"
+    print_info "开始一键下载并安装sing-box..."
     
     # 在交互模式下，系统检查已经在主函数中完成，这里不再重复检查
-    log_debug "开始安装sing-box"
-    install_singbox
+    log_debug "开始下载并安装sing-box"
+    download_and_install_singbox
     log_debug "开始配置sing-box"
     configure_singbox
     log_debug "开始启动服务"
@@ -1180,8 +1191,8 @@ main_install_process() {
     log_debug "显示客户端配置"
     show_client_config
     
-    log_info "sing-box一键安装完成！"
-    print_info "sing-box一键安装完成！"
+    log_info "sing-box一键下载并安装完成！"
+    print_info "sing-box一键下载并安装完成！"
     read -p "按回车键返回主菜单..." dummy
     show_main_menu
 }
@@ -2062,7 +2073,6 @@ main() {
         # 如果设置了任何一个环境变量，也启用非交互模式
         NON_INTERACTIVE="true"
         log_info "启用非交互模式 (部分环境变量已设置)"
-        log_info "启用交互模式"
     fi
     
     # 初始化日志
