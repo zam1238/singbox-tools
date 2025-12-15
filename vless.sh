@@ -1092,7 +1092,7 @@ non_interactive_install() {
     log_debug "进入非交互式下载并安装流程"
     print_info "开始非交互式下载并安装sing-box..."
     
-    # 在非交互模式下，系统检查已经在主函数中完成，这里不再重复检查
+    # 在非交互模式下，执行系统环境检查
     log_debug "开始下载并安装sing-box"
     download_and_install_singbox
     log_debug "开始配置sing-box"
@@ -1205,7 +1205,10 @@ main_install_process() {
     log_debug "进入主下载并安装流程"
     print_info "开始一键下载并安装sing-box..."
     
-    # 在交互模式下，系统检查已经在主函数中完成，这里不再重复检查
+    # 在交互模式下，执行系统环境检查
+    log_debug "执行系统环境检查"
+    perform_system_checks
+    
     log_debug "开始下载并安装sing-box"
     download_and_install_singbox
     log_debug "开始配置sing-box"
@@ -2106,12 +2109,11 @@ main() {
     log_debug "环境变量状态 - PORT: ${PORT:-未设置}, UUID: ${UUID:-未设置}, SNI: ${SNI:-未设置}"
     log_debug "非交互模式状态: ${NON_INTERACTIVE:-false}"
     
-    # 执行系统环境检查（清单模式）
-    perform_system_checks
-    
     # 如果设置了非交互模式，运行安装但不直接退出
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
         log_info "开始非交互式安装流程"
+        # 在非交互模式下执行系统环境检查
+        perform_system_checks
         non_interactive_install
         log_info "非交互式安装流程完成"
         # 安装完成后继续显示主菜单，而不是直接退出
