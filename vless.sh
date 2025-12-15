@@ -910,14 +910,19 @@ show_main_menu() {
         singbox_installed="已安装 ($(sing-box version | head -n1 | awk '{print $3}'))"
     fi
     
-    # 检查sing-box服务状态
+    # 检查sing-box服务状态（只有在已安装的情况下才检查服务状态）
     local singbox_status="未运行"
-    if pgrep sing-box &> /dev/null; then
+    if [[ "$singbox_installed" == *"已安装"* ]] && pgrep sing-box &> /dev/null; then
         singbox_status="运行中"
     fi
     
     echo -e "sing-box状态: $([[ "$singbox_installed" == *"已安装"* ]] && echo -e "${GREEN}$singbox_installed${NC}" || echo -e "${RED}$singbox_installed${NC}")"
-    echo -e "服务状态: $([[ "$singbox_status" == "运行中" ]] && echo -e "${GREEN}$singbox_status${NC}" || echo -e "${RED}$singbox_status${NC}")"
+    # 只有在已安装的情况下才显示服务状态
+    if [[ "$singbox_installed" == *"已安装"* ]]; then
+        echo -e "服务状态: $([[ "$singbox_status" == "运行中" ]] && echo -e "${GREEN}$singbox_status${NC}" || echo -e "${RED}$singbox_status${NC}")"
+    else
+        echo -e "服务状态: ${RED}未安装${NC}"
+    fi
     echo ""
     print_green "1. 一键下载并安装sing-box"
     print_skyblue "------------------"
