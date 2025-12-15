@@ -18,6 +18,9 @@ SNI_DEFAULT="www.yahoo.com"
 # 调试模式（可通过环境变量 DEBUG_MODE=true 启用）
 DEBUG_MODE=${DEBUG_MODE:-false}
 
+# 系统检查执行状态（防止重复执行）
+SYSTEM_CHECKS_PERFORMED="false"
+
 # 文件路径常量
 LOG_FILE="/var/log/sing-box-install.log"
 CONFIG_DIR="/etc/sing-box"
@@ -254,6 +257,12 @@ check_ipv6_support() {
 
 # 综合系统环境检查（清单模式）
 perform_system_checks() {
+    # 添加防重复执行检查
+    if [[ "${SYSTEM_CHECKS_PERFORMED}" == "true" ]]; then
+        log_debug "系统检查已执行过，跳过重复检查"
+        return 0
+    fi
+    
     log_debug "开始综合系统环境检查"
     print_blue "==========================================="
     print_blue "         系统环境检查清单"
@@ -261,6 +270,8 @@ perform_system_checks() {
     echo ""
     
     local failed_checks=0
+    # 标记检查已执行
+    SYSTEM_CHECKS_PERFORMED="true"
     
     # 检查Root权限
     log_debug "检查Root权限"
@@ -293,12 +304,20 @@ perform_system_checks() {
     # 检查必要的命令
     log_debug "检查必要命令"
     local required_commands=("curl" "wget" "tar")
+    # 重置命令检查相关变量，防止残留状态
+    local cmd=""
+    local cmd_path=""
     for cmd in "${required_commands[@]}"; do
-        if command -v $cmd &> /dev/null; then
-            log_debug "命令检查: $cmd 可用"
+        log_debug "正在检查命令: $cmd"
+        # 重置变量
+        cmd_path=""
+        # 添加额外的诊断信息
+        cmd_path=$(command -v "$cmd" 2>/dev/null)
+        if [[ -n "$cmd_path" ]]; then
+            log_debug "命令检查结果: $cmd 可用，路径: $cmd_path"
             echo -e "${GREEN}${CHECK_MARK}${NC} 命令检查: $cmd 可用"
         else
-            log_debug "命令检查: $cmd 未安装"
+            log_debug "命令检查结果: $cmd 未安装"
             echo -e "${RED}${CROSS_MARK}${NC} 命令检查: $cmd 未安装"
             ((failed_checks++))
         fi
