@@ -242,7 +242,12 @@ install_singbox() {
     if [ "$use_env_vars" = true ] && [ -n "$PORT" ]; then
         vless_port=$PORT
     else
-        vless_port=$(get_user_port)
+        # 非交互式模式下直接生成随机端口
+        if [ "$use_env_vars" = false ]; then
+            vless_port=$(shuf -i 1-65535 -n 1)
+        else
+            vless_port=$(get_user_port)
+        fi
     fi
 
     # 生成随机端口和密码
@@ -252,14 +257,24 @@ install_singbox() {
     if [ "$use_env_vars" = true ] && [ -n "$UUID" ]; then
         uuid=$UUID
     else
-        uuid=$(get_user_uuid)
+        # 非交互式模式下直接生成随机UUID
+        if [ "$use_env_vars" = false ]; then
+            uuid=$(cat /proc/sys/kernel/random/uuid)
+        else
+            uuid=$(get_user_uuid)
+        fi
     fi
     
     # 获取SNI
     if [ "$use_env_vars" = true ] && [ -n "$SNI" ]; then
         sni_value=$SNI
     else
-        sni_value=$(get_user_sni)
+        # 非交互式模式下直接使用默认值
+        if [ "$use_env_vars" = false ]; then
+            sni_value="$SNI_DEFAULT"
+        else
+            sni_value=$(get_user_sni)
+        fi
     fi
 
     output=$(/etc/sing-box/sing-box generate reality-keypair)
