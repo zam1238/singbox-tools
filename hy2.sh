@@ -52,24 +52,20 @@ command_exists() { command -v "$1" >/dev/null 2>&1; }
 # 检查服务状态通用函数（输出不变）
 check_service() {
     local service_name=$1
-    local service_file=$2
-    
-    # 未安装
-    [[ ! -f "${service_file}" ]] && { yellow "not installed"; return 2; }
 
-    # Alpine / OpenRC
+    # Alpine (OpenRC)
     if command_exists apk; then
-        rc-service "${service_name}" status >/dev/null 2>&1
-        if [ $? -eq 0 ]; then
+        if rc-service "${service_name}" status >/dev/null 2>&1; then
             green "running"
             return 0
         else
             yellow "not running"
             return 1
         fi
+    fi
 
     # systemd
-    else
+    if systemctl list-unit-files | grep -q "^${service_name}"; then
         if systemctl is-active --quiet "${service_name}"; then
             green "running"
             return 0
@@ -77,25 +73,42 @@ check_service() {
             yellow "not running"
             return 1
         fi
+    else
+        yellow "not installed"
+        return 2
     fi
 }
 
 
 # 检查nginx状态
 check_nginx() {
-    command_exists nginx || { yellow "not installed"; return 2; }
-    check_service "nginx" "$(command -v nginx)"
-}
-
-check_singbox() {
-    # Sing-box service file 可能在不同位置，因此只检查 systemctl 是否存在
-    if systemctl list-unit-files | grep -q "^sing-box"; then
-        check_service "sing-box" "$(command -v sing-box)"
+    if command_exists nginx; then
+        check_service "nginx"
+        return $?
     else
         yellow "not installed"
         return 2
     fi
 }
+
+
+check_singbox() {
+    # 优先使用 systemd 的 sing-box.service
+    if systemctl list-unit-files 2>/dev/null | grep -q "^sing-box.service"; then
+        check_service "sing-box.service"
+        return $?
+    fi
+
+    # 再尝试 OpenRC 名称（Alpine 常见）
+    if command_exists apk && rc-service sing-box status >/dev/null 2>&1; then
+        check_service "sing-box"
+        return $?
+    fi
+
+    yellow "not installed"
+    return 2
+}
+
 #根据系统类型安装、卸载依赖
 manage_packages() {
     if [ $# -lt 2 ]; then
