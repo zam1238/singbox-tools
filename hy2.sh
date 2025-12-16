@@ -10,7 +10,7 @@ export LANG=en_US.UTF-8
 
 # 项目信息常量
 AUTHOR="LittleDoraemon"
-VERSION="v1.0.4"
+VERSION="v1.0.5"
 
 # 定义颜色
 re="\033[0m"
@@ -863,6 +863,7 @@ EOF
         0)  menu ;;
         *)  red "无效的选项！" ;; 
     esac
+}
 disable_open_sub() {
     local singbox_status=$(check_singbox 2>/dev/null)
     local singbox_installed=$?
@@ -906,7 +907,7 @@ disable_open_sub() {
             server_ip=$(get_realip)
             password=$(tr -dc A-Za-z < /dev/urandom | head -c 32) 
             sed -i "s|\(location = /\)[^ ]*|\1$password|" /etc/nginx/conf.d/sing-box.conf
-	    sub_port=$(port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else echo "$port"; fi)
+        sub_port=$(port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else echo "$port"; fi)
             start_nginx
             (port=$(grep -E 'listen [0-9]+;' "/etc/nginx/conf.d/sing-box.conf" | awk '{print $2}' | sed 's/;//'); if [ "$port" -eq 80 ]; then echo ""; else green "订阅端口：$port"; fi); link=$(if [ -z "$sub_port" ]; then echo "http://$server_ip/$password"; else echo "http://$server_ip:$sub_port/$password"; fi); green "\n新的节点订阅链接：$link\n"
             ;; 
