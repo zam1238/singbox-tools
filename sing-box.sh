@@ -19,11 +19,13 @@ green="\e[1;32m"
 yellow="\e[1;33m"
 purple="\e[1;35m"
 skyblue="\e[1;36m"
+blue="\e[1;34m"
 red() { echo -e "\e[1;91m$1\033[0m"; }
 green() { echo -e "\e[1;32m$1\033[0m"; }
 yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 skyblue() { echo -e "\e[1;36m$1\033[0m"; }
+blue() { echo -e "\e[1;34m$1\033[0m"; }
 reading() { read -p "$(red "$1")" "$2"; }
 
 # 定义常量
@@ -798,8 +800,8 @@ change_config() {
             restart_singbox
             allow_port $new_port/tcp > /dev/null 2>&1
             sed -i 's/\(vless:\/\/[^@]*@[^:]*:\)[0-9]\{1,\}/\1'"$new_port"'/' $client_dir
-            base64 -w0 /etc/sing-box/url.txt > /etc/sing-box/sub.txt
-            while IFS= read -r line; do yellow "$line"; done < ${work_dir}/url.txt
+            base64 -w0 ${work_dir}/url.txt > ${work_dir}/sub.txt
+            while IFS= read -r line; do echo -e "${purple}$line"; done < ${work_dir}/url.txt
             green "\nvless-reality端口已修改成：${purple}$new_port${re} ${green}请更新订阅或手动更改vless-reality端口${re}\n"
             ;;
         2)
@@ -1205,15 +1207,14 @@ menu() {
    
    clear
    echo ""
-    echo -e "${BLUE}===============================================${NC}"
-    echo -e "${BLUE}          sing-box 一键安装管理脚本${NC}"
-    echo -e "${BLUE}          （偷偷用老王的脚本改的）${NC}"
-    echo -e "${GREEN}          作者: $AUTHOR${NC}"
-    echo -e "${BROWN}          版本: $VERSION${NC}"
-    echo -e "${BLUE}===============================================${NC}"
-    echo ""
-   green "老王的Github地址: ${purple}https://github.com/eooce/sing-box${re}\n"
+   blue "==============================================="
+   blue "          sing-box 一键安装管理脚本"
+   blue "          （偷偷用老王的脚本改的）"
+   skyblue "          作者: $AUTHOR"
+   yellow "          版本: $VERSION"
+   blue "==============================================="
    echo ""
+   green "老王的Github地址: ${purple}https://github.com/eooce/sing-box${re}\n"
    echo ""
    purple "---Argo 状态: ${argo_status}"   
    purple "--Nginx 状态: ${nginx_status}"
