@@ -261,31 +261,37 @@ allow_port() {
 install_singbox() {
     clear
     purple "正在准备sing-box中，请稍后..."
+    # 检查并安装必要的依赖包
+    if ! command_exists tar; then
+        manage_packages install tar
+    fi
     # 判断系统架构
 
-    # 自动识别 Arch
     ARCH=$(uname -m)
     case "$ARCH" in
-        x86_64) ARCH=amd64 ;;
-        aarch64) ARCH=arm64 ;;
-        armv7l) ARCH=armv7 ;;
-        i386|i686) ARCH=i386 ;;
-        mips64el) ARCH=mips64le ;;
-        riscv64) ARCH=riscv64 ;;
-        ppc64le) ARCH=ppc64le ;;
-        s390x) ARCH=s390x ;;
+        x86_64) ARCH="amd64" ;;
+        aarch64) ARCH="arm64" ;;
+        armv7l) ARCH="armv7" ;;
+        i386|i686) ARCH="i386" ;;
+        mips64el) ARCH="mips64le" ;;
+        riscv64) ARCH="riscv64" ;;
+        ppc64le) ARCH="ppc64le" ;;
+        s390x) ARCH="s390x" ;;
         *)
             echo "Unsupported architecture: $ARCH"
             exit 1
             ;;
     esac
 
-    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-linux-${ARCH}"
+    FILE="sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz"
+    DOWNLOAD_URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${FILE}"
 
-    echo "Downloading sing-box v${SINGBOX_VERSION} for ${ARCH}..."
-    curl -fsSL "$DOWNLOAD_URL" -o /usr/local/bin/sing-box
-    chmod +x /usr/local/bin/sing-box
-    echo "Installed sing-box v${SINGBOX_VERSION}"
+    echo "Downloading $FILE..."
+    curl -fsSL -o "$FILE" "$DOWNLOAD_URL"
+
+    tar -xzf "$FILE"
+    chmod +x sing-box
+    mv sing-box /usr/local/bin/sing-box
 
     # 检查是否通过环境变量提供了参数
     local use_env_vars=false
@@ -1119,7 +1125,7 @@ is_interactive_mode() {
 # 非交互式模式下的快速安装函数
 quick_install() {
     # 直接安装sing-box，使用环境变量参数
-    manage_packages install nginx jq tar openssl lsof coreutils
+    manage_packages install nginx jq openssl lsof coreutils
     install_singbox
     
     # 启动服务
@@ -1151,7 +1157,7 @@ main_loop() {
                 if [ ${check_singbox} -eq 0 ]; then
                     yellow "sing-box 已经安装！\n"
                 else
-                    manage_packages install nginx jq tar openssl lsof coreutils
+                    manage_packages install nginx jq openssl lsof coreutils
                     install_singbox
                     
                     if command_exists systemctl; then
