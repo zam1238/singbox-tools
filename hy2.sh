@@ -45,7 +45,7 @@ reading() {
 }
 
 
-# 定义常量
+# 定义变量
 server_name="sing-box"
 work_dir="/etc/sing-box"
 config_dir="${work_dir}/config.json"
@@ -288,9 +288,8 @@ install_singbox() {
     URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${FILENAME}"
 
 
-
-# 调用安装函数
-  install_sing_box_then_clear "$URL" "$FILENAME" "$work_dir" "$server_name"
+    # 调用singbox安装函数
+    install_sing_box_then_clear "$URL" "$FILENAME" "$work_dir" "$server_name"
 
     # 检查是否通过环境变量提供了参数
     local use_env_vars=false
@@ -346,13 +345,16 @@ install_singbox() {
             # 验证端口范围
             if [ "$max_port" -le "$min_port" ]; then
                 red "错误：RANGE_PORTS端口范围无效，结束端口必须大于起始端口"
-                # 不再unset RANGE_PORTS，让quick_install函数来处理
+                unset RANGE_PORTS  # 清除无效的 RANGE_PORTS
+                return 1  # 停止继续执行
             fi
         else
             red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 20000-50000)"
-            # 不再unset RANGE_PORTS，让quick_install函数来处理
+            unset RANGE_PORTS  # 清除无效的 RANGE_PORTS
+            return 1  # 停止继续执行
         fi
     fi
+
     
     # 确保工作目录存在
     [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}"
@@ -1208,10 +1210,11 @@ main_loop() {
     done
 }
 
-reading_input_port() {
+}
+
+reading_input() {
     echo -n "$1"
-    read input_value
-    printf -v "$2" "%s" "$input_value"
+    read "$2"
 }
 
 # 获取用户输入的端口（确保端口未被占用）
@@ -1220,16 +1223,23 @@ get_user_port() {
     local user_port
     
     while true; do
-        reading_input_port "请输入端口号 (1-65535)，或按回车跳过使用随机端口: " user_port
+        echo "等待用户输入端口..."
+        reading_input "请输入端口号 (1-65535)，或按回车跳过使用随机端口: " user_port
+        echo "用户输入的端口: '$user_port'"
         
         # 如果用户直接按回车，使用随机端口
         if [ -z "$user_port" ]; then
+            echo "用户未输入端口，使用随机端口"
             user_port=$(shuf -i 1-65535 -n 1)
             echo "$user_port"
             return
         fi
         
+        # 去除用户输入中的空格
+        user_port=$(echo "$user_port" | tr -d '[:space:]')
+        
         # 验证端口范围
+        echo "验证端口范围: $user_port"
         if ! [[ "$user_port" =~ ^[0-9]+$ ]] || [ "$user_port" -lt 1 ] || [ "$user_port" -gt 65535 ]; then
             red "端口号必须是1-65535之间的整数"
             echo "请重新输入"
@@ -1237,29 +1247,46 @@ get_user_port() {
         fi
         
         # 检查端口是否已被占用
-        if netstat -tuln | grep -q ":$user_port " || netstat -tuln6 | grep -q ":$user_port " || netstat -tuln | grep -q ":$user_port$" || netstat -tuln6 | grep -q ":$user_port$"; then
+        echo "检查端口是否已被占用: $user_port"
+        if ss -tuln | grep -q ":$user_port "; then
             red "端口 $user_port 已被占用，请选择其他端口"
             echo "请重新输入"
             continue
         fi
         
         # 端口有效且未被占用
+        echo "端口有效且未被占用: $user_port"
         echo "$user_port"
         return
     done
 }
 
+
 # 获取用户输入的UUID
 get_user_uuid() {
+    echo "开始调用 get_user_uuid 函数"
     local user_uuid
-    reading "请输入UUID，或按回车跳过使用随机UUID: " user_uuid
+    echo "等待用户输入UUID..."
     
+    # 获取用户输入的UUID
+    reading_input "请输入UUID，或按回车跳过使用随机UUID: " user_uuid
+    echo "用户输入的UUID: '$user_uuid'"
+
     # 如果用户直接按回车，生成随机UUID
     if [ -z "$user_uuid" ]; then
+        echo "用户未输入UUID，使用随机UUID"
         user_uuid=$(cat /proc/sys/kernel/random/uuid)
+    else
+        # 可选: 验证UUID格式是否正确
+        if ! [[ "$user_uuid" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]]; then
+            red "无效的UUID格式，请重新输入或按回车跳过"
+            echo "请重新输入UUID"
+            return 1  # 重新请求输入
+        fi
     fi
-    
+
     echo "$user_uuid"
+    echo "结束调用 get_user_uuid 函数"
 }
 
 # 处理RANGE_PORTS环境变量
