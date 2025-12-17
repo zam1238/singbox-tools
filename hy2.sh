@@ -1415,6 +1415,9 @@ generate_qr() {
     encoded=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$TEXT")
     QR_URL="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$encoded"
 
+    # 调用show_qr函数来展示二维码
+    show_qr "$TEXT"
+    
     echo "$QR_URL"
     echo "========================================"
 
@@ -1423,6 +1426,26 @@ generate_qr() {
     echo "$TEXT"
 }
 
+
+# 打印二维码的函数
+show_qr() {
+    local TEXT="$1"
+    
+    # 检查是否已安装 Node.js 和 npm
+    if ! command -v node &>/dev/null; then
+        echo "Node.js 未安装，请先安装 Node.js 和 npm。"
+        return 1
+    fi
+
+    # 检查是否已安装 qrcode-terminal
+    if ! npm list -g qrcode-terminal &>/dev/null; then
+        echo "正在安装 qrcode-terminal..."
+        npm install -g qrcode-terminal
+    fi
+
+    # 生成二维码并显示
+    node -e "const qrcode = require('qrcode-terminal'); qrcode.generate('$TEXT');"
+}
 
 # 调用主函数
 main
