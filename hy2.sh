@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # =========================
@@ -11,7 +10,7 @@ export LANG=en_US.UTF-8
 
 # 项目信息常量
 AUTHOR="LittleDoraemon"
-VERSION="v1.0.5"
+VERSION="v1.0.1"
 
 # 定义颜色
 re="\033[0m"
@@ -27,7 +26,20 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 skyblue() { echo -e "\e[1;36m$1\033[0m"; }
 blue() { echo -e "\e[1;34m$1\033[0m"; }
-reading() { read -p "$(red "$1")" "$2"; }
+reading() {
+    local prompt="$1"
+    local varname="$2"
+
+    # 输出红色提示，不让 read 处理颜色格式（避免污染输入）
+    echo -ne "$(red "$prompt")"
+
+    # 读取输入
+    read input_value
+
+    # 将输入写入调用时传的变量名
+    printf -v "$varname" "%s" "$input_value"
+}
+
 
 # 定义常量
 server_name="sing-box"
@@ -82,6 +94,7 @@ check_service() {
 
 
 # 检查nginx状态
+# 检查nginx状态
 check_nginx() {
     if command_exists nginx; then
         check_service "nginx"
@@ -91,7 +104,6 @@ check_nginx() {
         return 2
     fi
 }
-
 
 check_singbox() {
     # 优先使用 systemd 的 sing-box.service
@@ -1331,6 +1343,10 @@ main() {
     else
         # 非交互式模式 - 快速安装
         quick_install
+        # 安装完成后提示用户按任意键进入主循环菜单
+        green "\n非交互式安装已完成！"
+        read -n 1 -s -r -p $'\033[1;91m按任意键进入主菜单...\033[0m'
+        main_loop
     fi
 }
 
