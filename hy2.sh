@@ -273,10 +273,10 @@ install_singbox() {
     
     # 下载qrencode工具
     curl -sLo "${work_dir}/qrencode" "https://$ARCH.ssss.nyc.mn/qrencode"
-   # curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sbx"
+    # curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sbx"
 
     # 正确的 Sing-box 下载地址（官方源）
-    # SINGBOX_URL="https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-${ARCH}"
+    INGBOX_URL="https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-${ARCH}"
 
     # 下载 sing-box（不会卡住、可自动失败退出）
      if ! curl -L --retry 3 --retry-delay 2 -o "${work_dir}/sing-box" "$SINGBOX_URL"; then
