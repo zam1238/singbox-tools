@@ -26,7 +26,20 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 skyblue() { echo -e "\e[1;36m$1\033[0m"; }
 blue() { echo -e "\e[1;34m$1\033[0m"; }
-reading() { read -p "$(red "$1")" "$2"; }
+reading() {
+    local prompt="$1"
+    local varname="$2"
+
+    # 输出彩色提示但不换行
+    echo -ne "$(red "$prompt")"
+
+    # 读取用户输入
+    read input_value
+
+    # 把值写入调用者变量
+    printf -v "$varname" "%s" "$input_value"
+}
+
 
 # 定义常量
 server_name="sing-box"
@@ -81,6 +94,7 @@ check_service() {
 
 
 # 检查nginx状态
+# 检查nginx状态
 check_nginx() {
     if command_exists nginx; then
         check_service "nginx"
@@ -90,7 +104,6 @@ check_nginx() {
         return 2
     fi
 }
-
 
 check_singbox() {
     # 优先使用 systemd 的 sing-box.service
