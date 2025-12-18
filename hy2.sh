@@ -1189,24 +1189,19 @@ main_loop() {
 
 # 处理RANGE_PORTS环境变量
 handle_range_ports() {
-    # 如果提供了RANGE_PORTS环境变量，则自动配置端口跳跃
     echo "处理handle_range_ports函数"
     if [ -n "$RANGE_PORTS" ]; then
-
         echo "处理handle_range_ports函数,发现RANGE_PORTS不为空"
-        echo "处理handle_range_ports函数,发现RANGE_PORTS为: [$RANGE_PORTS]"
+        echo "处理handle_range_ports函数,发现RANGE_PORTS为: $RANGE_PORTS"
 
-        # 解析端口范围
         is_valid_range_ports_format "$RANGE_PORTS"
         local return_value=$?
         echo "is_valid_range_ports_format函数的返回值: $return_value"
 
-       
-        if [ $return_value -eq 1 ]; then
+        if [ $return_value -eq 0 ]; then   # ✔ 成功应该是 0
             local min_port="${BASH_REMATCH[1]}"
             local max_port="${BASH_REMATCH[2]}"
-            
-            # 验证端口范围
+
             if [ "$max_port" -gt "$min_port" ]; then
                 yellow "检测到RANGE_PORTS环境变量，正在自动配置端口跳跃: $min_port-$max_port"
                 configure_port_jump "$min_port" "$max_port"
@@ -1214,11 +1209,11 @@ handle_range_ports() {
                 red "错误：RANGE_PORTS端口范围无效，结束端口必须大于起始端口"
             fi
         else
-            echo "$RANGE_PORTS"
             red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 1-65535)"
         fi
     fi
 }
+
 
 # 配置端口跳跃功能
 configure_port_jump() {
