@@ -1189,8 +1189,13 @@ handle_range_ports() {
     # 如果提供了RANGE_PORTS环境变量，则自动配置端口跳跃
     echo "处理handle_range_ports函数"
     if [ -n "$RANGE_PORTS" ]; then
+
+        echo "处理handle_range_ports函数,发现RANGE_PORTS不为空"
+
         # 解析端口范围
         is_valid_range_ports_format "$RANGE_PORTS"
+
+       
         if [ $? -eq 1 ]; then
             local min_port="${BASH_REMATCH[1]}"
             local max_port="${BASH_REMATCH[2]}"
