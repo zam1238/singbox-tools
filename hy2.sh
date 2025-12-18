@@ -458,7 +458,7 @@ EOF
 get_info() {  
   yellow "\n ip检测中,请稍等...\n"
   server_ip=$(get_realip)
-  clear
+
   
   # 检查是否通过环境变量提供了节点名称
   if [ -n "$NODE_NAME" ]; then
