@@ -1145,6 +1145,7 @@ start_service_after_finish_sb(){
     sleep 5
     # 处理RANGE_PORTS环境变量
     handle_range_ports
+    sleep 10 #todo
     get_info
     add_nginx_conf
 }
