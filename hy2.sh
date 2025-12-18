@@ -1277,26 +1277,31 @@ EOF
 # 验证端口号是否有效
 function is_valid_port() {
   local port=$1
-  echo "检查端口 $port 是否有效..."
   if [[ -n "$port" ]] && [[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; then
-    return 1
+    return 0   # ✔ 合法
   else
-    return 0
+    return 1   # ❌ 不合法
   fi
 }
 
 # 检查端口是否被占用
-function is_port_occupied() {
-  local port=$1
-  echo "检查端口 $port 是否被占用..."
-  if lsof -i :$port &>/dev/null; then
-    echo "端口 $port 已被占用"
-    return 0  # 端口被占用
-  else
-    echo "端口 $port 未被占用"
-    return 1  # 端口未被占用
-  fi
+function is_valid_range_ports() {
+  local range="$1"
+
+  is_valid_range_ports_format "$range"
+  if [ $? -ne 0 ]; then return 1; fi
+
+  local start_port="${BASH_REMATCH[1]}"
+  local end_port="${BASH_REMATCH[2]}"
+
+  is_valid_port "$start_port" || return 1
+  is_valid_port "$end_port" || return 1
+
+  [ "$start_port" -le "$end_port" ] || return 1
+
+  return 0
 }
+
 
 # 验证RANGE_PORTS格式是否正确
 # 验证范围是否合法（成功返回 0，失败返回 1）
