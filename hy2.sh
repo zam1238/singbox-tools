@@ -1195,6 +1195,7 @@ handle_range_ports() {
                 red "错误：RANGE_PORTS端口范围无效，结束端口必须大于起始端口"
             fi
         else
+            echo "$RANGE_PORTS"
             red "错误：RANGE_PORTS格式无效，应为 起始端口-结束端口 (例如: 1-65535)"
         fi
     fi
