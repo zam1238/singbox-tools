@@ -755,39 +755,64 @@ stop_singbox() {
 # ======================================================================
 manage_singbox() {
     clear
-    _green "=== Sing-box 服务管理 ==="
-    echo ""
-    echo -e " ${_green}1.${re} 启动 Sing-box"
-    echo -e " ${_green}2.${re} 停止 Sing-box"
-    echo -e " ${_green}3.${re} 重启 Sing-box"
-    echo -e " ${_purple}0.${re} 返回"
+    _blue  "===================================================="
+    _green "                 Sing-box 服务管理"
+    _blue  "===================================================="
     echo ""
 
-    read -rp "请输入选择：" m
+    _green  " 1. 启动 Sing-box"
+    _green  " 2. 停止 Sing-box"
+    _green  " 3. 重启 Sing-box"
+    _purple " 0. 返回主菜单"
+    _yellow "----------------------------------------------------"
+    echo ""
+
+    read -rp "请输入选项(0-3): " m
 
     case "$m" in
-        1) start_singbox; _green "已启动 Sing-box";;
-        2) stop_singbox;  _green "已停止 Sing-box";;
-        3) restart_singbox; _green "已重启 Sing-box";;
-        0) return ;;
-        *) _red "无效选择" ;;
+        1)
+            start_singbox
+            _green "Sing-box 已启动"
+            ;;
+        2)
+            stop_singbox
+            _green "Sing-box 已停止"
+            ;;
+        3)
+            restart_singbox
+            _green "Sing-box 已重启"
+            ;;
+        0)
+            return
+            ;;
+        *)
+            _red "无效选项，请重试！"
+            ;;
     esac
+
+    echo ""
+    read -n 1 -s -r -p $'\033[1;92m按任意键返回菜单...\033[0m'
 }
+
 
 # ======================================================================
 # 订阅服务管理（启用 / 关闭 / 修改端口）
 # ======================================================================
 disable_open_sub() {
     clear
-    _green "=== 管理订阅服务 ==="
-    echo ""
-    echo -e " ${_green}1.${re} 关闭订阅服务(Nginx)"
-    echo -e " ${_green}2.${re} 启用订阅服务(Nginx)"
-    echo -e " ${_green}3.${re} 修改订阅端口"
-    echo -e " ${_purple}0.${re} 返回"
+    _blue  "===================================================="
+    _green "                 管理订阅服务"
+    _blue  "===================================================="
     echo ""
 
-    read -rp "请输入选择:" s
+    _green  " 1. 关闭订阅服务 (Nginx)"
+    _green  " 2. 启用订阅服务 (Nginx)"
+    _green  " 3. 修改订阅端口"
+    _purple " 0. 返回主菜单"
+    _yellow "----------------------------------------------------"
+    echo ""
+
+    read -rp "请输入选项(0-3): " s
 
     case "$s" in
         1)
@@ -799,18 +824,27 @@ disable_open_sub() {
             _green "订阅服务已开启"
             ;;
         3)
-            read -rp "请输入新的订阅端口: " new_sub_port
-            is_valid_port "$new_sub_port" || { _red "端口无效"; return; }
+            read -rp "请输入新的订阅端口：" new_sub_port
+            is_valid_port "$new_sub_port" || { _red "端口无效！"; return; }
 
-            sed -i "s/listen [0-9]*/listen $new_sub_port/" /etc/nginx/conf.d/singbox_sub.conf
-            sed -i "s/listen \[::]:[0-9]*/listen [::]:$new_sub_port/" /etc/nginx/conf.d/singbox_sub.conf
+            # 修改 nginx 的监听端口
+            sed -i "s/listen [0-9]\+;/listen $new_sub_port;/" /etc/nginx/conf.d/singbox_sub.conf
+            sed -i "s/listen \[::\]:[0-9]\+;/listen [::]:$new_sub_port;/" /etc/nginx/conf.d/singbox_sub.conf
 
             systemctl restart nginx
+            echo "$new_sub_port" > /etc/sing-box/sub.port
             _green "订阅端口修改成功 → $new_sub_port"
             ;;
-        0) return ;;
-        *) _red "无效选择" ;;
+        0)
+            return
+            ;;
+        *)
+            _red "无效选择，请重试！"
+            ;;
     esac
+
+    echo ""
+    read -n 1 -s -r -p $'\033[1;92m按任意键返回菜单...\033[0m'
 }
 
 # ======================================================================
@@ -836,55 +870,66 @@ check_nodes() {
 # ======================================================================
 change_config() {
     clear
-    _green "=== 修改节点配置 ==="
-    echo ""
-    echo -e " ${_green}1.${re} 修改主端口(HY2 listen_port)"
-    echo -e " ${_green}2.${re} 修改 UUID（密码）"
-    echo -e " ${_green}3.${re} 修改节点名称（仅订阅展示）"
-    echo -e " ${_green}4.${re} 添加跳跃端口"
-    echo -e " ${_green}5.${re} 删除跳跃端口"
-    echo -e " ${_purple}0.${re} 返回"
+    _blue  "===================================================="
+    _green "                 修改节点配置"
+    _blue  "===================================================="
     echo ""
 
-    read -rp "请输入选项：" choice
+    _green  " 1. 修改 HY2 主端口"
+    _green  " 2. 修改 UUID（密码）"
+    _green  " 3. 修改节点名称"
+    _green  " 4. 添加跳跃端口"
+    _green  " 5. 删除跳跃端口"
+    _purple " 0. 返回主菜单"
+    _yellow "----------------------------------------------------"
+    echo ""
+
+    read -rp "请输入选项(0-5): " choice
 
     case "$choice" in
         1)
-            read -rp "请输入新主端口：" newp
-            is_valid_port "$newp" || { _red "端口无效"; return; }
-            sed -i "s/\"listen_port\": [0-9]*/\"listen_port\": $newp/" "$config_dir"
+            read -rp "请输入新的 HY2 主端口：" new_port
+            is_valid_port "$new_port" || { _red "端口无效！"; return; }
+            sed -i "s/\"listen_port\": [0-9]*/\"listen_port\": $new_port/" "$config_dir"
             restart_singbox
-            _green "主端口已更新为：$newp"
+            _green "HY2 主端口修改成功：$new_port"
             ;;
         2)
-            read -rp "请输入新的 UUID：" newuuid
-            is_valid_uuid "$newuuid" || { _red "UUID 格式无效"; return; }
-            sed -i "s/\"password\": \".*\"/\"password\": \"$newuuid\"/" "$config_dir"
+            read -rp "请输入新的 UUID：" new_uuid
+            is_valid_uuid "$new_uuid" || { _red "UUID 格式无效！"; return; }
+            sed -i "s/\"password\": \".*\"/\"password\": \"$new_uuid\"/" "$config_dir"
             restart_singbox
-            _green "UUID 修改成功"
+            _green "UUID 修改成功！"
             ;;
         3)
-            read -rp "请输入新的节点名称：" newname
-            echo "#$newname" > "$sub_file"
+            read -rp "请输入新的节点名称：" new_name
+            echo "#$new_name" > "$sub_file"
             base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
-            _green "节点名称已更新"
+            _green "节点名称修改成功！"
             ;;
         4)
             read -rp "请输入跳跃起始端口：" jmin
             read -rp "请输入跳跃结束端口：" jmax
-            is_valid_range "${jmin}-${jmax}" || { _red "范围无效"; return; }
+            is_valid_range "${jmin}-${jmax}" || { _red "跳跃端口范围无效！"; return; }
             configure_port_jump "$jmin" "$jmax"
+            _green "跳跃端口已添加：${jmin}-${jmax}"
             ;;
         5)
             delete_jump_rule
-            _green "跳跃端口规则已删除（未影响其他 NAT 规则）"
+            _green "跳跃端口规则已删除！（其他 NAT 规则不受影响）"
             ;;
         0)
-            return ;;
+            return
+            ;;
         *)
-            _red "无效选项" ;;
+            _red "无效选项，请重试！"
+            ;;
     esac
+
+    echo ""
+    read -n 1 -s -r -p $'\033[1;92m按任意键返回菜单...\033[0m'
 }
+
 
 # ======================================================================
 # 卸载 Sing-box（完全清除）
@@ -1023,7 +1068,7 @@ menu() {
     _green  " 5. 修改节点配置"
     _green  " 6. 管理订阅服务"
     _yellow "----------------------------------------"
-    _purple " 7. 内置 SSH 工具箱"
+    _purple " 7. 老王工具箱"
     _yellow "----------------------------------------"
     _red    " 0. 退出脚本"
     _yellow "----------------------------------------"
