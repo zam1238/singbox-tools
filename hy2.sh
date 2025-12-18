@@ -1303,9 +1303,9 @@ function is_valid_range_ports() {
 function is_valid_range_ports_format() {
   local range=$1
   if [[ "$range" =~ ^([0-9]+)-([0-9]+)$ ]]; then
-    return 0
-  else
     return 1
+  else
+    return 0
   fi
 }
 
