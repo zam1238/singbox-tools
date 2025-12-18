@@ -421,23 +421,37 @@ EOF
 
     _green "Sing-box 服务已启动"
 }
+
+# URL 编码函数（Bash 原生
+urlencode() {
+    local LANG=C
+    local length="${#1}"
+    for (( i = 0; i < length; i++ )); do
+        local c="${1:i:1}"
+        case $c in
+            [a-zA-Z0-9.~_-]) printf "$c" ;;
+            *)
+                printf '%%%02X' "'$c"
+                ;;
+        esac
+    done
+}
+
 # ======================================================================
 # 生成二维码可点击链接
 # ======================================================================
 display_qr_link() {
     local TEXT="$1"
     local encoded
-    encoded=$(python3 - <<EOF
-import urllib.parse,sys
-print(urllib.parse.quote(sys.argv[1]))
-EOF
-"$TEXT")
+    encoded=$(urlencode "$TEXT")
+
     local QR_URL="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$encoded"
 
     _yellow "📱 二维码链接（点击打开扫码）："
     echo "$QR_URL"
     echo ""
 }
+
 
 # ======================================================================
 # 写入节点信息
