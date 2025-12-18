@@ -1191,11 +1191,11 @@ handle_range_ports() {
     if [ -n "$RANGE_PORTS" ]; then
 
         echo "处理handle_range_ports函数,发现RANGE_PORTS不为空"
-        echo "处理handle_range_ports函数,发现RANGE_PORTS为 $RANGE_PORTS"
+        echo "处理handle_range_ports函数,发现RANGE_PORTS为: $RANGE_PORTS"
         # 解析端口范围
         is_valid_range_ports_format "$RANGE_PORTS"
         local return_value=$?
-        echo "is_valid_range_ports_format 返回值: $return_value"
+        echo "is_valid_range_ports_format函数的返回值: $return_value"
 
        
         if [ $return_value -eq 1 ]; then
@@ -1300,9 +1300,12 @@ function is_port_occupied() {
 # 验证RANGE_PORTS格式是否正确
 function is_valid_range_ports() {
   local range=$1
+
   echo "检查RANGE_PORTS格式..."
   echo  "range_ports=$range"
+
   is_valid_range_ports_format "$range"
+
   if [ $? -eq 1 ]; then
     start_port=${BASH_REMATCH[1]}
     end_port=${BASH_REMATCH[2]}
