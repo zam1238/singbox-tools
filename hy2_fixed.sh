@@ -440,46 +440,30 @@ EOF
 }
 
 # ======================================================================
-# 生成 3 种订阅文件：文本 + Base64 + JSON
+# 写入节点信息
 # ======================================================================
 generate_all_subscription_files() {
-    local ip="$1"
-    local base_url="$2"
+    local base_url="$1"
 
     mkdir -p "$work_dir"
 
-    # --- ① 纯文本订阅（包含所有客户端链接） ---
+    # ① sub.txt（简单纯文本订阅）
 cat > "$sub_file" <<EOF
-# Hy2 Node
+# HY2 主订阅
 $base_url
-
-# Clash / Mihomo
-https://sublink.eooce.com/clash?config=$base_url
-
-# Sing-box
-https://sublink.eooce.com/singbox?config=$base_url
-
-# Surge
-https://sublink.eooce.com/surge?config=$base_url
-
-# Quantumult X
-https://sublink.eooce.com/qx?config=$base_url
 EOF
 
-    # --- ② Base64 订阅 ---
+    # ② Base64 文件（V2RayN / Shadowrocket / 特殊客户端会用到）
     base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
 
-    # --- ③ JSON 订阅（Clash / SFA / SFI） ---
+    # ③ JSON（高级客户端使用）
 cat > "${work_dir}/sub.json" <<EOF
 {
-  "hy2": "$base_url",
-  "clash": "https://sublink.eooce.com/clash?config=$base_url",
-  "singbox": "https://sublink.eooce.com/singbox?config=$base_url",
-  "surge": "https://sublink.eooce.com/surge?config=$base_url",
-  "qx": "https://sublink.eooce.com/qx?config=$base_url"
+  "hy2": "$base_url"
 }
 EOF
 }
+
 
 # ======================================================================
 # 输出订阅信息（美观 UI）
@@ -524,6 +508,34 @@ generate_subscription_info() {
     _skyblue "  请在 V2RayN / Shadowrocket / Nekobox / Karing 等中启用『跳过证书验证』"
 
     echo ""
+
+    # ============================================================
+    # ⓪ Hy2 原生协议串（自动兼容带跳跃端口与不带跳跃端口）
+    # ============================================================
+
+    # 节点名称（不转义）
+    node_name="${NODE_NAME:-HY2-Node}"
+
+    # 是否存在跳跃端口
+    if [[ -n "$RANGE_PORTS" ]]; then
+        # 拆分跳跃端口范围
+        min_port="${RANGE_PORTS%-*}"
+        max_port="${RANGE_PORTS#*-}"
+
+        # 带跳跃端口的 mport 参数
+        mport_param="${hy2_port},${min_port}-${max_port}"
+    else
+        # 无跳跃端口 → 只使用主端口（不重复输出）
+        mport_param="${hy2_port}"
+    fi
+
+    # Hy2 原生协议串
+    hy2_raw="hysteria2://${HY2_PASSWORD}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${mport_param}#${node_name}"
+
+    _green "⓪ Hy2 原生协议（支持所有原生 Hy2 客户端）"
+    _green "$hy2_raw"
+    display_qr_link "$hy2_raw"
+    _yellow "------------------------------------------------------------"
 
     # =============================
     # ① 通用订阅
