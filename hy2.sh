@@ -1268,7 +1268,11 @@ EOF
 function is_valid_port() {
   local port=$1
   echo "检查端口 $port 是否有效..."
-  [[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+  if [[ -n "$port" ]] && [[ "$port" =~ ^[1-9][0-9]{0,4}$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 # 验证端口是否被占用
