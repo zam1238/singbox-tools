@@ -2,13 +2,12 @@
 export LANG=en_US.UTF-8
 
 # ======================================================================
-# Sing-box Hy2 一键脚本（增强修正版）
-# 作者：littleDoraemon  —  增强与结构修复：ChatGPT
+# Sing-box Hy2 一键脚本（hy2版）-----适用于singbox版本>1.12+
+# 作者：littleDoraemon  
 # 说明：
-#   - 完全保持原脚本风格
+#   - 带端口跳跃功能的hy2
 #   - 修复跳跃端口逻辑、主端口更新、订阅同步不一致问题
-#   - 新增子菜单规范（0 返回主菜单 / 88 退出脚本）
-#   - 保留订阅端口 sub.port 的不自动修改原则
+#   - 带订阅功能
 # ======================================================================
 
 
@@ -46,7 +45,7 @@ is_interactive_mode() {
 # ======================================================================
 # 全局常量与关键路径
 # ======================================================================
-SINGBOX_VERSION="1.12.13"
+SINGBOX_VERSION="1.12.13" #Sing-box版本，因为sb版本老是变动，还不适配旧配置，所以只好逮一个固定版本
 AUTHOR="littleDoraemon"
 VERSION="v1.0.1"
 
@@ -62,7 +61,7 @@ config_dir="${work_dir}/config.json"
 # 订阅文件（sub.txt）
 sub_file="${work_dir}/sub.txt"
 
-# ⚠ 订阅端口文件：只在首次安装时生成，之后绝不自动修改
+# ⚠ 订阅端口文件：只在首次安装时生成
 sub_port_file="/etc/sing-box/sub.port"
 
 # 默认 UUID（自动模式下使用）
@@ -84,6 +83,7 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 blue()   { echo -e "\e[1;34m$1\033[0m"; }
 
+
 # 渐变文本（可用于标题）
 gradient() {
     local text="$1"
@@ -95,6 +95,9 @@ gradient() {
     done
     echo
 }
+
+
+red_input() { printf "\e[1;91m%s\033[0m" "$1"; }
 
 # 错误输出工具
 err() { red "[错误] $1" >&2; }
@@ -182,7 +185,7 @@ generate_qr() {
 
 
 # ======================================================================
-# URL 编码 / 解码函数（必须位于脚本前部，否则会找不到）
+# URL 编码 / 解码函数
 # ======================================================================
 urlencode() {
     printf "%s" "$1" | jq -sRr @uri
@@ -193,10 +196,13 @@ urldecode() {
 }
 
 
-# 校验端口格式
+# 校验端口号格式
 is_valid_port() { [[ "$1" =~ ^[0-9]+$ && "$1" -ge 1 && "$1" -le 65535 ]]; }
 
-# 判断端口是否被占用
+
+# ======================================================================
+# 判断端口是否被占用，占用返回0，空闲返回1
+# ======================================================================
 is_port_occupied() {
     ss -tuln | grep -q ":$1 " && return 0
     lsof -i :"$1" &>/dev/null && return 0
@@ -218,20 +224,23 @@ get_port() {
 
     # 自动随机选择端口
     while true; do
-        rp=$(shuf -i 20000-60000 -n 1)
+        rp=$(shuf -i 1-65535 -n 1)
         ! is_port_occupied "$rp" && { echo "$rp"; return; }
     done
 }
 
+
 # ======================================================================
-# 自动获取节点名称（增强修复版）
-# 说明：
-#   - 保留你原本的逻辑：ipapi.co → ip.sb / ipinfo → 默认名称
-#   - 并确保在任何网络环境下不会卡死
+# 获取节点名称（最终严格规则版）
+# 规则：
+#   1. 国家代码 ≠ 空 且 运营商 ≠ 空 → 国家代码-运营商
+#   2. 国家代码 ≠ 空 且 运营商 = 空 → 国家代码
+#   3. 国家代码 = 空 且 运营商 ≠ 空 → DEFAULT_NODE_NAME
+#   4. 国家代码 = 空 且 运营商 = 空 → DEFAULT_NODE_NAME
 # ======================================================================
 get_node_name() {
 
-    # 默认节点名根据脚本名称推断
+    # 默认节点名称的生成逻辑（与你脚本保持一致）
     local DEFAULT_NODE_NAME
     if [[ "${0##*/}" == *"hy2"* || "${0##*/}" == *"hysteria2"* ]]; then
         DEFAULT_NODE_NAME="$AUTHOR-hy2"
@@ -239,38 +248,59 @@ get_node_name() {
         DEFAULT_NODE_NAME="$AUTHOR"
     fi
 
-    # 若用户通过环境变量指定，则优先使用
+    # 用户提供的 NODE_NAME 优先
     if [[ -n "$NODE_NAME" ]]; then
         echo "$NODE_NAME"
         return
     fi
 
-    local node_name=""
-    local country org
+    local country=""
+    local org=""
 
-    # 尝试通过 ipapi.co 识别地区 + 运营商
-    node_name=$(
-        curl -fs --max-time 2 https://ipapi.co/json 2>/dev/null |
-        sed -n 's/.*"country":"\([^\"]*\)".*"org":"\([^\"]*\)".*/\1-\2/p' |
-        sed 's/[ ]\+/_/g'
-    )
+    # ======================================================
+    # 尝试从 ipapi.co 获取国家代码与运营商
+    # ======================================================
+    country=$(curl -fs --max-time 2 https://ipapi.co/country 2>/dev/null | tr -d '\r\n')
+    org=$(curl -fs --max-time 2 https://ipapi.co/org 2>/dev/null \
+        | sed 's/[ ]\+/_/g')
 
-    # 若 ipapi.co 获取失败，则尝试备用方案
-    if [[ -z "$node_name" ]]; then
+    # ======================================================
+    # fallback 获取方式（ip.sb + ipinfo.io）
+    # ======================================================
+    if [[ -z "$country" ]]; then
         country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
-        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null |
-              awk '{$1=""; print $0}' |
-              sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
-
-        if [[ -n "$country" && -n "$org" ]]; then
-            node_name="${country}-${org}"
-        fi
     fi
 
-    # 最终 fallback 使用默认名称
-    [[ -z "$node_name" ]] && node_name="$DEFAULT_NODE_NAME"
+    if [[ -z "$org" ]]; then
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null \
+            | awk '{$1=""; print $0}' \
+            | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+    fi
 
-    echo "$node_name"
+    # ======================================================
+    # 按你的严格规则构造节点名称
+    # ======================================================
+
+    # 情况 1：国家代码 ≠ 空 且 运营商 ≠ 空 → "国家代码-运营商"
+    if [[ -n "$country" && -n "$org" ]]; then
+        echo "${country}-${org}"
+        return
+    fi
+
+    # 情况 2：国家代码 ≠ 空 且 运营商 = 空 → "国家代码"
+    if [[ -n "$country" && -z "$org" ]]; then
+        echo "$country"
+        return
+    fi
+
+    # 情况 3：国家代码 = 空 且 运营商 ≠ 空 → 返回默认名称
+    if [[ -z "$country" && -n "$org" ]]; then
+        echo "$DEFAULT_NODE_NAME"
+        return
+    fi
+
+    # 情况 4：国家代码 = 空 且 运营商 = 空 → 返回默认名称
+    echo "$DEFAULT_NODE_NAME"
 }
 
 # ======================================================================
@@ -324,6 +354,45 @@ get_uuid() {
 # -------------------- 跳跃端口格式校验工具 ---------------------------
 # ======================================================================
 
+# ======================================================================
+# 从 url.txt 解析跳跃端口范围 RANGE_PORTS（增强修复版）
+# 说明：
+#   - 从 url.txt 中提取 mport=xxxx,10000-20000 这样的端口区间
+#   - 若没有跳跃端口 → 返回空字符串
+#   - 脚本所有跳跃端口功能都依赖该函数
+# ======================================================================
+parse_range_ports_from_url() {
+
+    # 若 url.txt 不存在 → 认定无跳跃端口
+    if [[ ! -f "$client_dir" ]]; then
+        echo ""
+        return
+    fi
+
+    local url mport_part range
+    url=$(cat "$client_dir")
+
+    # 提取 mport= 的内容，例如：
+    # mport=31020,10000-20000
+    mport_part=$(echo "$url" | sed -n 's/.*mport=\([^&#]*\).*/\1/p')
+
+    # 没有 mport 字段 → 无跳跃端口
+    [[ -z "$mport_part" ]] && {
+        echo ""
+        return
+    }
+
+    # 如果 mport 格式为 主端口,范围
+    # 如：31020,10000-20000
+    if [[ "$mport_part" == *,* ]]; then
+        range="${mport_part#*,}"
+        echo "$range"
+    else
+        # mport 只有主端口，没有范围 → 无跳跃
+        echo ""
+    fi
+}
+
 is_valid_range() {
     [[ "$1" =~ ^([0-9]+)-([0-9]+)$ ]] || return 1
     local min="${BASH_REMATCH[1]}"
@@ -338,7 +407,7 @@ get_range_ports() {
     echo "$r"
 }
 # ======================================================================
-# 跳跃端口删除模块（增强版）
+# 跳跃端口删除模块
 # 说明：
 #   本模块用于彻底删除跳跃端口功能，包括：
 #       - 删除 NAT 跳跃端口规则（IPv4 + IPv6）
@@ -367,6 +436,37 @@ print_delete_jump_success() {
 }
 
 
+# ======================================================================
+# 添加跳跃端口 NAT 规则
+# 功能：
+#   - 将 udp 的 min-max 跳跃端口区间转发到 HY2 主端口 listen_port
+#   - 添加 IPv4 与 IPv6 NAT 规则
+#   - 规则使用 comment 标记为 hy2_jump，便于删除
+# ======================================================================
+
+add_jump_rule() {
+    local min="$1"
+    local max="$2"
+    local listen_port="$3"
+
+    # ===============================
+    # IPv4 NAT 转发规则
+    # ===============================
+    iptables -t nat -A PREROUTING \
+        -p udp --dport ${min}:${max} \
+        -m comment --comment "hy2_jump" \
+        -j DNAT --to-destination :${listen_port}
+
+    # ===============================
+    # IPv6 NAT 转发规则
+    # ===============================
+    ip6tables -t nat -A PREROUTING \
+        -p udp --dport ${min}:${max} \
+        -m comment --comment "hy2_jump" \
+        -j DNAT --to-destination :${listen_port}
+
+    green "已添加跳跃端口 NAT 转发：${min}-${max} → ${listen_port}"
+}
 
 # ======================================================================
 # 删除 NAT 跳跃端口规则
@@ -428,10 +528,9 @@ restore_url_without_jump() {
 
 
 # ======================================================================
-# 恢复订阅文件（sub.txt / base64 / json）
+# 恢复订阅文件
 # 说明：
 #   - 保持订阅端口不变
-#   - 删除跳跃端口后的订阅应指向 sub.port，而不是端口范围
 # ======================================================================
 restore_sub_files_default() {
 
@@ -481,7 +580,7 @@ EOF
     green "订阅文件已恢复为不含跳跃端口的标准格式"
 }
 # ======================================================================
-# 添加跳跃端口（增强版 configure_port_jump）
+# 添加跳跃端口
 # 功能说明：
 #   1. 自动放行跳跃端口区间（INPUT）
 #   2. 清除旧的 NAT hy2_jump 规则，再重新添加
@@ -489,116 +588,133 @@ EOF
 #   4. 为跳跃端口生成新的订阅文件（不修改 sub.port）
 #   5. 兼容普通模式与跳跃端口模式的切换
 # ======================================================================
+
 configure_port_jump() {
     local min="$1"
     local max="$2"
 
-    # 获取主端口
+    # 获取 HY2 主端口
     local listen_port
     listen_port=$(jq -r '.inbounds[0].listen_port' "$config_dir")
     [[ -z "$listen_port" ]] && { err "无法读取 HY2 主端口"; return 1; }
 
-    # ===============================
-    # 1. INPUT 放行跳跃端口区间（IPv4 + IPv6）
-    # ===============================
-    iptables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null ||
+    echo ""
+    green "开始应用跳跃端口：${min}-${max}"
+    echo ""
+
+    # =====================================================
+    # 1. 放行 INPUT（IPv4 + IPv6）
+    # =====================================================
+    iptables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null || \
         iptables -I INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT
 
-    ip6tables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null ||
+    ip6tables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null || \
         ip6tables -I INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT
 
+    green "已放行 UDP 端口区间：${min}-${max}"
 
-    # ===============================
-    # 2. 删除旧跳跃端口 → 添加新 NAT 规则
-    # ===============================
-    delete_jump_rule    # 清除旧 NAT / URL / 订阅中的 mport
+
+    # =====================================================
+    # 2. 清理旧 NAT 规则（但不删除 URL/订阅）
+    # =====================================================
+    while iptables -t nat -C PREROUTING -m comment --comment "hy2_jump" &>/dev/null; do
+        iptables -t nat -D PREROUTING -m comment --comment "hy2_jump"
+    done
+
+    while ip6tables -t nat -C PREROUTING -m comment --comment "hy2_jump" &>/dev/null; do
+        ip6tables -t nat -D PREROUTING -m comment --comment "hy2_jump"
+    done
+
+    yellow "旧跳跃 NAT 规则已清理"
+
+
+    # =====================================================
+    # 3. 添加新的 NAT 规则（IPv4 / IPv6）
+    # =====================================================
     add_jump_rule "$min" "$max" "$listen_port"
 
 
-    # ===============================
-    # 3. 重启 sing-box 服务
-    # ===============================
-    restart_singbox
-    green "跳跃端口 ${min}-${max} 已应用到主端口 ${listen_port}"
-
-
-    # ===============================
-    # 4. 更新 url.txt 的 mport 字段
-    # ===============================
+    # =====================================================
+    # 4. 更新 URL (url.txt) — 只更新 mport，不动其它参数
+    # =====================================================
     ensure_url_file
-
     if [[ -f "$client_dir" ]]; then
         old_url=$(cat "$client_dir")
-        node_tag="${old_url#*#}"     # 节点名称
-        url_body="${old_url%%#*}"    # URL 主体（含 query 参数）
 
-        # 分离查询参数
-        query_part="${url_body#*\?}"
+        url_body="${old_url%%#*}"
+        node_tag="${old_url#*#}"
+
         host_part="${url_body%%\?*}"
+        query_part="${url_body#*\?}"
 
-        # Case A: 没有 ? 参数
+        # Case A：没有 query 参数
         if [[ "$url_body" == "$host_part" ]]; then
             new_url="${host_part}?mport=${listen_port},${min}-${max}#${node_tag}"
-
         else
-            # Case B: 有其它 query 参数
             if echo "$query_part" | grep -q "mport="; then
-                # 替换旧的 mport
                 new_query=$(echo "$query_part" | sed "s/mport=[^&]*/mport=${listen_port},${min}-${max}/")
             else
-                # 追加 mport
                 new_query="${query_part}&mport=${listen_port},${min}-${max}"
             fi
-
             new_url="${host_part}?${new_query}#${node_tag}"
         fi
 
-        # 写回 url.txt
         echo "$new_url" > "$client_dir"
-        green "url.txt 已同步写入新的跳跃端口范围 ${min}-${max}"
-    else
-        yellow "未找到 url.txt，跳跃端口不会写入 URL"
+        green "url.txt 已更新 mport=${listen_port},${min}-${max}"
     fi
 
 
-    # ===============================
-    # 5. 同步更新订阅文件（sub.txt / base64 / json）
-    #    ⚠ 保持 sub.port 不被改变
-    # ===============================
-    local server_ip uuid sub_url
-
+    # =====================================================
+    # 5. 更新订阅文件（保持 sub.port，不写跳跃区间）
+    # =====================================================
     uuid=$(jq -r '.inbounds[0].users[0].password' "$config_dir")
+
+    # 获取订阅端口 sub.port（不自动修改）
+    if [[ -f "$sub_port_file" ]]; then
+        sub_port=$(cat "$sub_port_file")
+    else
+        sub_port=$((listen_port + 1))
+    fi
 
     ipv4=$(curl -4 -s https://api.ipify.org)
     ipv6=$(curl -6 -s https://api64.ipify.org)
     [[ -n "$ipv4" ]] && server_ip="$ipv4" || server_ip="[$ipv6]"
 
-    # 跳跃端口订阅 URL 格式：
-    #   http://IP:10000-20000/UUID
-    sub_url="http://${server_ip}:${min}-${max}/${uuid}"
+    # ❗关键：订阅永远使用 sub_port，而不是 min-max
+    sub_url="http://${server_ip}:${sub_port}/${uuid}"
 
-# 写 sub.txt
 cat > "$sub_file" <<EOF
-# HY2 主订阅（跳跃端口已启用）
+# HY2 主订阅（跳跃端口模式，但订阅端口不变）
 $sub_url
 EOF
 
-    # 写 base64
     base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
 
-    # 写 json
 cat > "${work_dir}/sub.json" <<EOF
 {
   "hy2": "$sub_url"
 }
 EOF
 
-    green "订阅文件已同步更新为跳跃端口模式：${min}-${max}"
-    echo
-    yellow "注意：订阅端口 sub.port 未被修改（遵守你的规则）"
+    green "订阅文件已更新（保持 sub.port 原样，不使用跳跃端口）"
+
+
+    # =====================================================
+    # 6. 重启服务
+    # =====================================================
+    restart_singbox
+    green "跳跃端口已成功启用 → 生效区间：${min}-${max}"
+
+    echo ""
+    yellow "提示：订阅端口 sub.port 未被修改（这是正确行为）"
+    echo ""
 }
+
+
+
+
 # ======================================================================
-# 修改 HY2 主端口（增强版 + 完整注释）
+# 修改 HY2 主端口
 # 功能说明：
 #   - 自动修改 config.json 的 listen_port
 #   - 若开启跳跃端口 → 自动删除旧 NAT & 重建新 NAT
@@ -609,7 +725,8 @@ EOF
 # ======================================================================
 change_hy2_port() {
 
-    read -rp "请输入新的 HY2 主端口：" new_port
+
+    read -rp "$(red_input "请输入新的 HY2 主端口：")" new_port
 
     # ------------------------------
     # 基础端口校验
@@ -718,67 +835,75 @@ EOF
     yellow "注意：订阅端口 sub.port 未被修改，遵从你的规则"
 }
 
+
 # ======================================================================
-# 修改 UUID（增强版 + 完整注释）
-# 功能说明：
-#   - 修改 config.json 内的 UUID
-#   - 自动同步 url.txt 中的 UUID
-#   - 自动同步订阅 sub.txt / base64 / sub.json
-#   - 兼容跳跃端口模式
-#   - ⚠ 完全不修改 sub.port（遵从你的规则）
+# 修改 UUID
+# 功能特点：
+#   - 支持按回车自动生成新的 UUID
+#   - 使用 jq 安全写入 JSON（绝不会破坏 config.json）
+#   - 自动同步更新 url.txt / sub.txt / sub_base64 / sub.json
+#   - 完全兼容跳跃端口模式（RANGE_PORTS）
+#   - ⚠ 不修改 sub.port（严格遵守你的规则）
 # ======================================================================
 change_uuid() {
 
-    read -rp "请输入新的 UUID（密码）：" new_uuid
+    echo ""
+    read -rp "$(red_input "请输入新的 UUID（回车自动生成）：")" new_uuid
 
-    # ------------------------------
-    # 1. 校验 UUID 格式
-    # ------------------------------
-    if ! is_valid_uuid "$new_uuid"; then
-        red "UUID 格式不正确，请重新输入"
-        return
+    # ---------------------------------------------------------------
+    # 1. 如果用户直接按回车 → 自动生成新的 UUID
+    # ---------------------------------------------------------------
+    if [[ -z "$new_uuid" ]]; then
+        new_uuid=$(cat /proc/sys/kernel/random/uuid)
+        green "已自动生成新的 UUID：$new_uuid"
+    else
+        if ! is_valid_uuid "$new_uuid"; then
+            red "UUID 格式不正确，请重新输入"
+            return
+        fi
     fi
 
-    ensure_url_file
-
+    # 当前 UUID
     local old_uuid
     old_uuid=$(jq -r '.inbounds[0].users[0].password' "$config_dir")
 
-    # ------------------------------
-    # 2. 更新 config.json 中的 UUID
-    # ------------------------------
-    sed -i "s/\"password\": \"${old_uuid}\"/\"password\": \"${new_uuid}\"/" "$config_dir"
-    green "已更新 config.json 中的 UUID"
+    # ---------------------------------------------------------------
+    # 2. 使用 jq 安全写入 UUID（不会破坏 JSON）
+    # ---------------------------------------------------------------
+    tmpfile=$(mktemp)
+    jq '.inbounds[0].users[0].password = "'"$new_uuid"'"' "$config_dir" > "$tmpfile" \
+        && mv "$tmpfile" "$config_dir"
 
-    # ------------------------------
-    # 3. 更新 url.txt（若存在）
-    # ------------------------------
+    green "config.json 中的 UUID 已成功更新"
+
+
+    # ---------------------------------------------------------------
+    # 3. 同步 url.txt（安全替换 UUID）
+    # ---------------------------------------------------------------
     if [[ -f "$client_dir" ]]; then
-        local old_url=$(cat "$client_dir")
+        local old_url new_url_body node_tag
 
-        local node_tag="${old_url#*#}"       # # 后面的节点名称
-        local url_body="${old_url%%#*}"      # # 前面的完整 URL 主体部分
+        old_url=$(cat "$client_dir")
+        node_tag="${old_url#*#}"
+        url_body="${old_url%%#*}"
 
-        # 替换前缀 uuid@
-        local updated_url=$(echo "$url_body" | sed "s://${old_uuid}@::${new_uuid}@:")
+        # 替换 URL 中的旧 UUID
+        new_url_body=$(echo "$url_body" | sed "s/${old_uuid}@/${new_uuid}@/")
 
-        echo "${updated_url}#${node_tag}" > "$client_dir"
-        green "url.txt 已同步新的 UUID"
-    else
-        yellow "未找到 url.txt，跳过 URL 更新"
+        echo "${new_url_body}#${node_tag}" > "$client_dir"
+        green "url.txt 已同步更新 UUID"
     fi
 
 
-    # ------------------------------
-    # 4. 同步更新订阅文件（sub.txt / base64 / json）
-    # ------------------------------
-    local hy2_port sub_port server_ip RANGE_PORTS sub_link
+    # ---------------------------------------------------------------
+    # 4. 同步订阅文件（兼容跳跃端口）
+    # ---------------------------------------------------------------
+    local hy2_port server_ip RANGE_PORTS sub_link sub_port
 
-    # 获取订阅端口（不自动修改）
+    # 订阅端口 sub.port 不自动修改（严格遵守规则）
     if [[ -f "$sub_port_file" ]]; then
         sub_port=$(cat "$sub_port_file")
     else
-        # fallback（极少情况出现）
         hy2_port=$(jq -r '.inbounds[0].listen_port' "$config_dir")
         sub_port=$((hy2_port + 1))
     fi
@@ -788,17 +913,14 @@ change_uuid() {
     ipv6=$(curl -6 -s https://api64.ipify.org)
     [[ -n "$ipv4" ]] && server_ip="$ipv4" || server_ip="[$ipv6]"
 
-    # 检查跳跃端口是否启用
+    # 检查是否为跳跃端口模式
     RANGE_PORTS=$(parse_range_ports_from_url)
 
     if [[ -n "$RANGE_PORTS" ]]; then
-        # 跳跃端口订阅 URL
         sub_link="http://${server_ip}:${RANGE_PORTS}/${new_uuid}"
     else
-        # 普通订阅 URL
         sub_link="http://${server_ip}:${sub_port}/${new_uuid}"
     fi
-
 
 # 写入 sub.txt
 cat > "$sub_file" <<EOF
@@ -806,38 +928,42 @@ cat > "$sub_file" <<EOF
 $sub_link
 EOF
 
-    # 写 base64
     base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
 
-    # 写 json
+# 写入 sub.json
 cat > "${work_dir}/sub.json" <<EOF
 {
   "hy2": "$sub_link"
 }
 EOF
 
-    green "订阅文件（sub.txt/base64/json）已同步更新 UUID"
+    green "订阅文件已同步更新 UUID"
 
-    # ------------------------------
-    # 5. 重启 Sing-box 服务，使 UUID 生效
-    # ------------------------------
+
+    # ---------------------------------------------------------------
+    # 5. 重启 Sing-box 服务
+    # ---------------------------------------------------------------
     restart_singbox
 
-    green "UUID 修改成功：${old_uuid} → ${new_uuid}"
-    yellow "注意：订阅端口 sub.port 未被修改（遵照你的规则）"
+    if systemctl is-active sing-box >/dev/null 2>&1; then
+        green "UUID 修改成功：${old_uuid} → ${new_uuid}"
+    else
+        red "警告：Sing-box 重启失败，请检查 config.json 是否有效"
+        yellow "执行：systemctl status sing-box -n 50"
+    fi
 }
 
+
+
 # ======================================================================
-# 修改节点名称（增强版 + 完整注释）
+# 修改节点名称
 # 功能说明：
 #   - 修改 url.txt 中的节点名称（#tag 部分）
 #   - 自动同步更新 sub.txt / base64 / sub.json
-#   - 兼容跳跃端口（RANGE_PORTS）
-#   - ⚠ 不修改 sub.port（遵守你的规则）
 # ======================================================================
 change_node_name() {
 
-    read -rp "请输入新的节点名称：" new_name
+    read -rp "$(red_input "请输入新的节点名称：")" new_name
 
     # 保存与编码
     NEW_NAME="$new_name"
@@ -970,13 +1096,9 @@ print_node_info_custom() {
     # ======================================================
     # 2. 生成订阅 URL
     # ======================================================
-    if [[ -n "$range_ports" ]]; then
-        base_url="http://${server_ip}:${range_ports}/${uuid}"
-    else
-        base_url="http://${server_ip}:${sub_port}/${uuid}"
-    fi
+    base_url="http://${server_ip}:${sub_port}/${uuid}"
 
-    yellow '\n提示：请在客户端开启 “跳过证书验证” 或设置 TLS insecure=true\n'
+    yellow '\n提示：需打开V2rayN或其他软件里的 “跳过证书验证” 或将节点的Insecure或TLS=true\n'
 
     # ======================================================
     # 通用订阅格式
@@ -1053,6 +1175,9 @@ EOF
 # ======================================================================
 generate_subscription_info() {
 
+    # 若 NODE_NAME 未设置，则自动生成
+    [[ -z "$NODE_NAME" ]] && NODE_NAME=$(get_node_name)
+
     # ------------------------
     # 获取服务器 IP（优先 IPv4）
     # ------------------------
@@ -1077,22 +1202,14 @@ generate_subscription_info() {
     # ------------------------
     RANGE_PORTS=$(parse_range_ports_from_url)
 
-    if [[ -n "$RANGE_PORTS" ]]; then
-        base_url="http://${server_ip}:${RANGE_PORTS}/${uuid}"
-    else
-        base_url="http://${server_ip}:${sub_port}/${uuid}"
-    fi
+    base_url="http://${server_ip}:${sub_port}/${uuid}"
 
     # ------------------------
     # 生成本地订阅文件（sub.txt / base64 / json）
     # ------------------------
     generate_all_subscription_files "$base_url"
 
-    clear
-    blue "============================================================"
-    blue "           Sing-box Hy2 节点安装完成（增强版）"
-    blue "============================================================"
-
+    clear 
     # ------------------------
     # 输出完整节点信息
     # ------------------------
@@ -1180,6 +1297,82 @@ EOF
 
 
 # ======================================================================
+# 修改nginx订阅端口
+# ======================================================================
+change_subscribe_port() {
+
+    # 1. 输入端口
+    read -rp "$(red "请输入新的订阅端口：")" new_port
+
+    # 2. 校验端口格式
+    if ! is_valid_port "$new_port"; then
+        red "端口无效"
+        return
+    fi
+    if is_port_occupied "$new_port"; then
+        red "端口已被占用"
+        return
+    fi
+
+    # 3. 更新 sub.port 文件
+    echo "$new_port" > "$sub_port_file"
+    green "订阅端口已修改为：$new_port"
+
+    # 4. 获取必要信息
+    uuid=$(jq -r '.inbounds[0].users[0].password' "$config_dir")
+
+    ipv4=$(curl -4 -s https://api.ipify.org)
+    ipv6=$(curl -6 -s https://api64.ipify.org)
+    [[ -n "$ipv4" ]] && server_ip="$ipv4" || server_ip="[$ipv6]"
+
+    # 5. 生成新的订阅 URL（注意：不受跳跃端口影响）
+    sub_url="http://${server_ip}:${new_port}/${uuid}"
+
+    # 6. 写入订阅文件
+cat > "$sub_file" <<EOF
+# HY2 主订阅（订阅端口已手动修改）
+$sub_url
+EOF
+
+    base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
+
+cat > "${work_dir}/sub.json" <<EOF
+{
+  "hy2": "$sub_url"
+}
+EOF
+
+    # 7. 同步更新 Nginx 配置（必须保留 uuid 路径）
+cat > /etc/nginx/conf.d/singbox_sub.conf <<EOF
+server {
+    listen $new_port;
+    listen [::]:$new_port;
+
+    server_name sb_sub.local;
+
+    location /$uuid {
+        alias $sub_file;
+        default_type text/plain;
+    }
+
+    location / {
+        return 404;
+    }
+}
+EOF
+
+    # 8. 重启 Nginx
+    if nginx -t >/dev/null 2>&1; then
+        systemctl restart nginx
+        green "订阅系统（Nginx + 订阅文件）已同步到新端口：$new_port"
+    else
+        red "Nginx 配置测试失败，请检查 /etc/nginx/conf.d/singbox_sub.conf"
+    fi
+}
+
+
+
+# ======================================================================
 # 订阅服务管理菜单（遵循你的新菜单规范 + 完整注释）
 # ======================================================================
 disable_open_sub() {
@@ -1187,10 +1380,10 @@ disable_open_sub() {
         clear
         blue  "========== 管理订阅服务（Nginx） =========="
         echo ""
-        green " 1. 关闭订阅服务"
-        green " 2. 启动订阅服务"
-        green " 3. 修改订阅端口（手动操作）"
-        green " 4. 修复订阅配置 (重新生成 Nginx 配置)"
+        green " 1. 关闭nginx"
+        green " 2. 启动nginx"
+        green " 3. 修改nginx订阅端口（手动操作）"
+        green " 4. 重启订阅服务（Nginx）"
         yellow "---------------------------------------------"
         green  " 0. 返回主菜单"
         red    "88. 退出脚本"
@@ -1203,56 +1396,29 @@ disable_open_sub() {
 
             1)
                 systemctl stop nginx
-                green "订阅服务已关闭"
+                green "nginx服务已关闭"
                 ;;
 
             2)
                 systemctl start nginx
                 if systemctl is-active nginx >/dev/null; then
-                    green "订阅服务已启动"
+                    green "nginx服务已启动"
                 else
-                    red "订阅服务启动失败"
+                    red "nginx服务启动失败"
                 fi
                 ;;
 
             3)
-                read -rp "请输入新的订阅端口：" new_port
-                if ! is_valid_port "$new_port"; then red "端口无效"; continue; fi
-                if is_port_occupied "$new_port"; then red "端口已被占用"; continue; fi
-
-                echo "$new_port" > "$sub_port_file"
-                green "订阅端口已修改为：$new_port"
-
-                # 同步更新订阅文件
-                uuid=$(jq -r '.inbounds[0].users[0].password' "$config_dir")
-                ipv4=$(curl -4 -s https://api.ipify.org)
-                ipv6=$(curl -6 -s https://api64.ipify.org)
-                [[ -n "$ipv4" ]] && server_ip="$ipv4" || server_ip="[$ipv6]"
-
-                sub_url="http://${server_ip}:${new_port}/${uuid}"
-
-cat > "$sub_file" <<EOF
-# HY2 主订阅（订阅端口已修改）
-$sub_url
-EOF
-
-                base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
-
-cat > "${work_dir}/sub.json" <<EOF
-{
-  "hy2": "$sub_url"
-}
-EOF
-
-                systemctl restart nginx
-                green "订阅系统和 Nginx 已重新加载"
+                change_subscribe_port
                 ;;
 
             4)
-                yellow "正在修复订阅配置..."
-                add_nginx_conf
                 systemctl restart nginx
-                green "订阅服务配置已重新生成"
+                if systemctl is-active nginx >/dev/null 2>&1; then
+                    green "Nginx已重启成功"
+                else
+                    red "Nginx服务重启失败，请检查 Nginx 配置"
+                fi
                 ;;
 
             0)
@@ -1268,10 +1434,37 @@ EOF
                 ;;
         esac
 
-        read -n 1 -s -r -p "按任意键继续..."
+        
     done
 }
 
+
+# ======================================================================
+# handle_range_ports（增强版）
+# 功能说明：
+#   - 用于在安装过程中自动处理 RANGE_PORTS 环境变量
+#   - 如果用户通过自动安装指定了 RANGE_PORTS，则在安装结束后自动生效
+#   - 手动模式不会触发本函数（符合你的设计）
+#   - ⚠ 不修改 sub.port（遵守你的规则）
+# ======================================================================
+handle_range_ports() {
+
+    # 若未指定 RANGE_PORTS，则不处理
+    [[ -z "$RANGE_PORTS" ]] && return
+
+    # 格式检查
+    if ! is_valid_range "$RANGE_PORTS"; then
+        err "跳跃端口格式无效（正确示例：1-65535"
+        return
+    fi
+
+    # 提取起始与结束端口
+    local min="${RANGE_PORTS%-*}"
+    local max="${RANGE_PORTS#*-}"
+
+    green "自动模式检测到跳跃端口区间：${min}-${max}"
+    configure_port_jump "$min" "$max"
+}
 
 
 # ======================================================================
@@ -1306,6 +1499,7 @@ quick_install() {
     start_service_after_finish_sb
 
     green "自动安装完成！"
+    sleep 10
     check_nodes
     green "节点信息已全部显示。"
 }
@@ -1339,7 +1533,7 @@ manage_singbox() {
             *) red "无效输入，请重新选择" ;;
         esac
 
-        read -n 1 -s -r -p "按任意键继续..."
+     
     done
 }
 
@@ -1349,7 +1543,7 @@ manage_singbox() {
 # 查看节点信息（支持跳跃端口）
 # ======================================================================
 check_nodes() {
-    clear
+   #  clear  #todo
     blue "=================== 查看节点信息 ==================="
 
     [[ ! -f "$config_dir" ]] && { red "未找到配置文件"; return; }
@@ -1476,13 +1670,12 @@ stop_singbox() {
 # 说明：
 #   - 自动与手动模式都支持（基于是否传入环境变量）
 #   - 自动创建目录 / 证书 / config.json
-#   - 不修改 sub.port（遵守你的规则）
+#   -这里面的配置仅仅兼容 Sing-box ≥ 1.12 的 DNS 格式
 # ======================================================================
 install_singbox() {
     clear
     purple "准备下载并安装 Sing-box..."
 
-    # 创建运行目录（防止 url.txt 等写入失败）
     mkdir -p "$work_dir"
 
     # -------------------- 检测 CPU 架构 --------------------
@@ -1518,32 +1711,20 @@ install_singbox() {
     green "Sing-box 已成功安装"
 
     # --------------------
-    # 判断自动或交互模式
+    # 判断模式（自动 or 交互）
     # --------------------
     is_interactive_mode
     if [[ $? -eq 1 ]]; then
         not_interactive=1
-        white "当前模式：自动模式（由环境变量触发）"
-    else
-        not_interactive=0
-        white "当前模式：交互模式（用户手动输入）"
-    fi
-
-    # ==================================================================
-    # 自动模式
-    # ==================================================================
-    if [[ $not_interactive -eq 1 ]]; then
+        white "当前模式：自动模式"
         PORT=$(get_port "$PORT")
         UUID=$(get_uuid "$UUID")
-        HY2_PASSWORD="$UUID"
-
-    # ==================================================================
-    # 交互模式
-    # ==================================================================
     else
-        # ---------- 输入主端口 ----------
+        not_interactive=0
+        white "当前模式：交互模式"
+
         while true; do
-            read -rp "请输入 HY2 主端口：" USER_PORT
+            read -rp "$(red_input "请输入 HY2 主端口：")" USER_PORT
             if is_valid_port "$USER_PORT" && ! is_port_occupied "$USER_PORT"; then
                 PORT="$USER_PORT"
                 break
@@ -1552,56 +1733,68 @@ install_singbox() {
             fi
         done
 
-        # ---------- 输入 UUID ----------
         while true; do
-            read -rp "请输入 UUID（留空自动生成）：" USER_UUID
+            read -rp "$(red_input "请输入 UUID（回车自动生成随机 UUID）")" USER_UUID
+           # 用户直接按回车 → 自动生成真正随机 UUID
             if [[ -z "$USER_UUID" ]]; then
-                UUID="$DEFAULT_UUID"
+                UUID=$(cat /proc/sys/kernel/random/uuid)
+                green "已自动生成 UUID：$UUID"
                 break
-            elif is_valid_uuid "$USER_UUID"; then
+            fi
+
+            # 用户填写 UUID → 校验格式
+            if is_valid_uuid "$USER_UUID"; then
                 UUID="$USER_UUID"
                 break
             else
-                red "UUID 格式不正确，请重新输入"
+                red "UUID 格式不正确，请重新输入。"
             fi
         done
-
-        HY2_PASSWORD="$UUID"
     fi
 
-    white "最终 HY2 主端口：$PORT"
-    white "最终 UUID：$UUID"
-
-    RANGE_PORTS=$(get_range_ports "$RANGE_PORTS")
-    [[ -n "$RANGE_PORTS" ]] && green "启用跳跃端口范围：$RANGE_PORTS"
-
-    NODE_NAME=$(get_node_name)
+    HY2_PASSWORD="$UUID"
     hy2_port="$PORT"
 
-    allow_port "$PORT" udp
+    allow_port "$hy2_port" udp
 
     # ==================================================================
-    # 自动探测 DNS 设置
+    # 自动探测 DNS 设置（已完全兼容新版 Sing-box）
     # ==================================================================
     ipv4_ok=false
     ipv6_ok=false
-
-    ping -4 -c1 -W1 8.8.8.8   >/dev/null 2>&1 && ipv4_ok=true
+    ping -4 -c1 -W1 8.8.8.8 >/dev/null 2>&1 && ipv4_ok=true
     ping -6 -c1 -W1 2001:4860:4860::8888 >/dev/null 2>&1 && ipv6_ok=true
 
-    dns_servers=()
-    $ipv4_ok && dns_servers+=("\"8.8.8.8\"")
-    $ipv6_ok && dns_servers+=("\"2001:4860:4860::8888\"")
-    [[ ${#dns_servers[@]} -eq 0 ]] && dns_servers+=("\"8.8.8.8\"")
-
+    dns_servers_json=""
     if $ipv4_ok && $ipv6_ok; then
-        dns_strategy="prefer_ipv4"
+        dns_servers_json='
+      {
+        "tag": "dns-google-ipv4",
+        "address": "8.8.8.8"
+      },
+      {
+        "tag": "dns-google-ipv6",
+        "address": "2001:4860:4860::8888"
+      }'
     elif $ipv4_ok; then
+        dns_servers_json='
+      {
+        "tag": "dns-google-ipv4",
+        "address": "8.8.8.8"
+      }'
+    else
+        dns_servers_json='
+      {
+        "tag": "dns-google-ipv6",
+        "address": "2001:4860:4860::8888"
+      }'
+    fi
+
+    if $ipv4_ok; then
         dns_strategy="prefer_ipv4"
     else
         dns_strategy="prefer_ipv6"
     fi
-
 
     # ==================================================================
     # 生成 TLS 密钥与证书
@@ -1613,16 +1806,20 @@ install_singbox() {
         -subj "/C=US/ST=CA/O=bing.com/CN=bing.com" \
         -out "${work_dir}/cert.pem"
 
-
     # ==================================================================
-    # 生成 config.json（保持原风格）
+    # 生成最终合法 JSON（不会报 jq 错误）
     # ==================================================================
 cat > "$config_dir" <<EOF
 {
-  "log": { "level": "error", "output": "$work_dir/sb.log" },
+  "log": {
+    "level": "error",
+    "output": "$work_dir/sb.log"
+  },
 
   "dns": {
-    "servers": [ $(IFS=,; echo "${dns_servers[*]}") ],
+    "servers": [
+$dns_servers_json
+    ],
     "strategy": "$dns_strategy"
   },
 
@@ -1656,9 +1853,8 @@ EOF
 
     green "配置文件已生成：$config_dir"
 
-
     # ==================================================================
-    # systemd 服务注册
+    # 注册 systemd 服务
     # ==================================================================
 cat > /etc/systemd/system/sing-box.service <<EOF
 [Unit]
@@ -1776,11 +1972,11 @@ change_config() {
             2) change_uuid ;;
             3) change_node_name ;;
             4)
-                read -rp "请输入跳跃端口起始值：" jmin
-                read -rp "请输入跳跃端口结束值：" jmax
+                read -rp "$(red_input "请输入跳跃端口起始值：")" jmin
+                read -rp "$(red_input "请输入跳跃端口结束值：")" jmax
 
                 if ! is_valid_range "${jmin}-${jmax}"; then
-                    red "格式无效（必须为 10000-20000 这种格式）"
+                    red "格式无效（必须为 1-65535 这种格式）"
                 else
                     configure_port_jump "$jmin" "$jmax"
                 fi
@@ -1793,7 +1989,7 @@ change_config() {
             *) red "无效输入，请重新选择" ;;
         esac
 
-        read -n 1 -s -r -p "按任意键继续..."
+
     done
 }
 
@@ -1873,7 +2069,6 @@ main_loop() {
             *) red "无效选项，请重新输入" ;;
         esac
 
-        read -n 1 -s -r -p "按任意键返回主菜单..."
     done
 }
 
