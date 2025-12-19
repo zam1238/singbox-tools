@@ -1195,11 +1195,7 @@ generate_subscription_info() {
     # ------------------------
     generate_all_subscription_files "$base_url"
 
-    #clear  # todo
-    blue "============================================================"
-    blue "           Sing-box Hy2 节点安装完成（增强版）"
-    blue "============================================================"
-
+    clear 
     # ------------------------
     # 输出完整节点信息
     # ------------------------
@@ -1675,15 +1671,20 @@ install_singbox() {
         done
 
         while true; do
-            read -rp "请输入 UUID（留空自动生成）：" USER_UUID
+            read -rp "请输入 UUID（回车自动生成随机 UUID）：" USER_UUID
+           # 用户直接按回车 → 自动生成真正随机 UUID
             if [[ -z "$USER_UUID" ]]; then
-                UUID="$DEFAULT_UUID"
+                UUID=$(cat /proc/sys/kernel/random/uuid)
+                green "已自动生成 UUID：$UUID"
                 break
-            elif is_valid_uuid "$USER_UUID"; then
+            fi
+
+            # 用户填写 UUID → 校验格式
+            if is_valid_uuid "$USER_UUID"; then
                 UUID="$USER_UUID"
                 break
             else
-                red "UUID 格式不正确，请重新输入"
+                red "UUID 格式不正确，请重新输入。"
             fi
         done
     fi
