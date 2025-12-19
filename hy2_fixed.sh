@@ -228,7 +228,7 @@ delete_jump_rule() {
 }
 
 # ======================================================================
-# 应用跳跃端口区间 NAT
+# 应用跳跃端口 NAT（完全增强版：同步更新 url.txt / sub.txt / base64）
 # ======================================================================
 configure_port_jump() {
     local min="$1"
@@ -238,20 +238,83 @@ configure_port_jump() {
 
     [[ -z "$listen_port" ]] && { err "无法读取 HY2 主端口"; return 1; }
 
+    # ===============================
     # 放行跳跃端口区间
+    # ===============================
     iptables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null ||
         iptables -I INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT
 
     ip6tables -C INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT &>/dev/null ||
         ip6tables -I INPUT -p udp -m multiport --dports ${min}:${max} -j ACCEPT
 
-    # 清除旧规则 → 添加新规则
     delete_jump_rule
     add_jump_rule "$min" "$max" "$listen_port"
 
     restart_singbox
-    green "跳跃端口区间 ${min}-${max} 已应用"
+    green "跳跃端口 ${min}-${max} 已应用"
+
+    # ===============================
+    # ★ 更新 url.txt 的 mport（增强兼容版）
+    # ===============================
+    if [[ -f "$client_dir" ]]; then
+        old_url=$(cat "$client_dir")
+        node_tag="${old_url#*#}"
+        url_body="${old_url%%#*}"
+
+        query="${url_body#*\?}"
+        host_part="${url_body%%\?*}"
+
+        # 原 URL 没有参数 ?
+        if [[ "$url_body" == "$host_part" ]]; then
+            new_url="${host_part}?mport=${listen_port},${min}-${max}#${node_tag}"
+        else
+            if echo "$query" | grep -q "mport="; then
+                new_query=$(echo "$query" | sed "s/mport=[^&]*/mport=${listen_port},${min}-${max}/")
+            else
+                new_query="${query}&mport=${listen_port},${min}-${max}"
+            fi
+            new_url="${host_part}?${new_query}#${node_tag}"
+        fi
+
+        echo "$new_url" > "$client_dir"
+        green "url.txt 已更新（同步跳跃端口）"
+    else
+        yellow "未找到 url.txt，跳跃端口不会保存节点"
+    fi
+
+
+    # ===============================
+    # ★ 同步更新 sub.txt / sub_base64.txt / sub.json
+    # ===============================
+    local server_ip
+    ipv4=$(curl -4 -s https://api.ipify.org)
+    ipv6=$(curl -6 -s https://api64.ipify.org)
+    [[ -n "$ipv4" ]] && server_ip="$ipv4" || server_ip="[$ipv6]"
+
+    uuid=$(jq -r '.inbounds[0].users[0].password' "$config_dir")
+
+    # 订阅 URL 使用跳跃端口
+    sub_url="http://${server_ip}:${min}-${max}/${uuid}"
+
+    # 写 sub.txt
+cat > "$sub_file" <<EOF
+# HY2 主订阅（含跳跃端口）
+$sub_url
+EOF
+
+    # 写 base64
+    base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
+
+    # 写 sub.json
+cat > "${work_dir}/sub.json" <<EOF
+{
+  "hy2": "$sub_url"
 }
+EOF
+
+    green "已同步更新 sub.txt / sub_base64 / sub.json（已加入跳跃端口）"
+}
+
 
 handle_range_ports() {
     [[ -z "$RANGE_PORTS" ]] && return
