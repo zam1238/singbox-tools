@@ -1434,7 +1434,7 @@ disable_open_sub() {
                 ;;
         esac
 
-        read -n 1 -s -r -p "按任意键继续..."
+        
     done
 }
 
@@ -1533,7 +1533,7 @@ manage_singbox() {
             *) red "无效输入，请重新选择" ;;
         esac
 
-        read -n 1 -s -r -p "按任意键继续..."
+     
     done
 }
 
@@ -1989,7 +1989,7 @@ change_config() {
             *) red "无效输入，请重新选择" ;;
         esac
 
-        read -n 1 -s -r -p "按任意键继续..."
+
     done
 }
 
