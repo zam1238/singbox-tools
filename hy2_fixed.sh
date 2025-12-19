@@ -42,6 +42,7 @@ AUTHOR="littleDoraemon"
 VERSION="v3.0"
 
 work_dir="/etc/sing-box"
+client_dir="${work_dir}/url.txt"
 config_dir="${work_dir}/config.json"
 sub_file="${work_dir}/sub.txt"
 sub_port_file="/etc/sing-box/sub.port"
@@ -500,6 +501,9 @@ print_node_info_custom() {
 
     hy2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${mport_param}"
 
+    # 写入 Hy2 原始链接到 url.txt
+    echo "$hy2_url" > "$client_dir"
+
     # ========== ★★★ 新增：输出 hy2 原始链接 ★★★ ==========
     purple "\nHY2 原始链接（可直接导入客户端）："
     green  "$hy2_url"
@@ -796,6 +800,15 @@ check_nodes() {
     ipv6=$(curl -6 -s https://api64.ipify.org)
     [[ -n "$ipv4" ]] && server_ip="$ipv4" || server_ip="[$ipv6]"
 
+    if [[ -f "$client_dir" ]]; then
+        hy2_url=$(cat "$client_dir")
+    else
+        hy2_url="（未找到原始链接，请重新安装或生成）"
+    fi
+
+    purple "\nHY2 原始链接（从 url.txt 读取）："
+    green "$hy2_url"
+    echo
     print_node_info_custom "$server_ip" "$hy2_port" "$uuid" "$sub_port" "$RANGE_PORTS"
 }
 
