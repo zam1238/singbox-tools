@@ -518,7 +518,9 @@ print_node_info_custom() {
         base_url="http://${server_ip}:${sub_port}/${uuid}"
     fi
 
-    yellow "\n温馨提醒：请在客户端启用“跳过证书验证 (insecure)” 以确保连接成功\n"
+    yellow '\n温馨提醒：需打开 V2rayN 或其他软件里的 "跳过证书验证"，或将节点的 Insecure 或 TLS 设置为 "true"\n'
+
+    
 
     # ---------------- 通用订阅 ----------------
     green "V2rayN / Shadowrocket / Nekobox / Loon / Karing / Sterisand 订阅链接："
