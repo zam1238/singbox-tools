@@ -223,6 +223,82 @@ get_port() {
     done
 }
 
+# ======================================================================
+# 自动获取节点名称（增强修复版）
+# 说明：
+#   - 保留你原本的逻辑：ipapi.co → ip.sb / ipinfo → 默认名称
+#   - 并确保在任何网络环境下不会卡死
+# ======================================================================
+get_node_name() {
+
+    # 默认节点名根据脚本名称推断
+    local DEFAULT_NODE_NAME
+    if [[ "${0##*/}" == *"hy2"* || "${0##*/}" == *"hysteria2"* ]]; then
+        DEFAULT_NODE_NAME="$AUTHOR-hy2"
+    else
+        DEFAULT_NODE_NAME="$AUTHOR"
+    fi
+
+    # 若用户通过环境变量指定，则优先使用
+    if [[ -n "$NODE_NAME" ]]; then
+        echo "$NODE_NAME"
+        return
+    fi
+
+    local node_name=""
+    local country org
+
+    # 尝试通过 ipapi.co 识别地区 + 运营商
+    node_name=$(
+        curl -fs --max-time 2 https://ipapi.co/json 2>/dev/null |
+        sed -n 's/.*"country":"\([^\"]*\)".*"org":"\([^\"]*\)".*/\1-\2/p' |
+        sed 's/[ ]\+/_/g'
+    )
+
+    # 若 ipapi.co 获取失败，则尝试备用方案
+    if [[ -z "$node_name" ]]; then
+        country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null |
+              awk '{$1=""; print $0}' |
+              sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+
+        if [[ -n "$country" && -n "$org" ]]; then
+            node_name="${country}-${org}"
+        fi
+    fi
+
+    # 最终 fallback 使用默认名称
+    [[ -z "$node_name" ]] && node_name="$DEFAULT_NODE_NAME"
+
+    echo "$node_name"
+}
+
+# ======================================================================
+# 放行 HY2 主端口的 UDP 流量（增强版）
+# 说明：
+#   - 保留你的原逻辑：firewalld → iptables → ip6tables
+#   - 必须保证端口可被外网访问，否则节点不可用
+# ======================================================================
+allow_port() {
+    local port="$1"
+
+    # firewalld（CentOS/RHEL）
+    if command_exists firewall-cmd; then
+        firewall-cmd --permanent --add-port=${port}/udp &>/dev/null
+        firewall-cmd --reload &>/dev/null
+    fi
+
+    # IPv4 规则
+    iptables  -C INPUT -p udp --dport "$port" -j ACCEPT &>/dev/null ||
+        iptables  -I INPUT -p udp --dport "$port" -j ACCEPT
+
+    # IPv6 规则
+    ip6tables -C INPUT -p udp --dport "$port" -j ACCEPT &>/dev/null ||
+        ip6tables -I INPUT -p udp --dport "$port" -j ACCEPT
+
+    green "已放行 UDP 端口：$port"
+}
+
 
 # ======================================================================
 # ------------------------ UUID 工具函数 -------------------------------
