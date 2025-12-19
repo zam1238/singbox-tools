@@ -84,6 +84,9 @@ yellow() { echo -e "\e[1;33m$1\033[0m"; }
 purple() { echo -e "\e[1;35m$1\033[0m"; }
 blue()   { echo -e "\e[1;34m$1\033[0m"; }
 
+
+
+
 # 渐变文本（可用于标题）
 gradient() {
     local text="$1"
@@ -95,6 +98,9 @@ gradient() {
     done
     echo
 }
+
+
+red_input() { printf "\e[1;91m%s\033[0m" "$1"; }
 
 # 错误输出工具
 err() { red "[错误] $1" >&2; }
@@ -1680,7 +1686,7 @@ install_singbox() {
         white "当前模式：交互模式"
 
         while true; do
-            read -rp "请输入 HY2 主端口：" USER_PORT
+            read -rp "$(red_input "请输入 HY2 主端口：")" USER_PORT
             if is_valid_port "$USER_PORT" && ! is_port_occupied "$USER_PORT"; then
                 PORT="$USER_PORT"
                 break
@@ -1690,7 +1696,7 @@ install_singbox() {
         done
 
         while true; do
-            read -rp "请输入 UUID（回车自动生成随机 UUID）：" USER_UUID
+            read -rp "$(red_input "请输入 UUID（回车自动生成随机 UUID）")" USER_UUID
            # 用户直接按回车 → 自动生成真正随机 UUID
             if [[ -z "$USER_UUID" ]]; then
                 UUID=$(cat /proc/sys/kernel/random/uuid)
