@@ -469,26 +469,14 @@ EOF
 # 在线二维码输出（使用你指定的 URL 方式）
 # ======================================================================
 generate_qr() {
-    local TEXT="$1"
+        local link="$1"
+    if [ -z "$link" ]; then
+        echo "QR Link 生成失败：链接为空"
+        return 1
+    fi
 
-    echo ""
-    echo "========================================"
-    echo "📱 请手机扫码以下二维码链接（全球可用）："
-
-    encoded=$(python3 - <<EOF
-import urllib.parse,sys
-print(urllib.parse.quote(sys.argv[1]))
-EOF
-"$TEXT")
-
-    QR_URL="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$encoded"
-
-    echo "$QR_URL"
-    echo "========================================"
-    echo ""
-    echo "🔧 若终端无法识别二维码，可手动复制以下链接："
-    echo "$TEXT"
-    echo ""
+    echo "二维码链接："
+    echo "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${link}"
 }
 
 # ======================================================================
