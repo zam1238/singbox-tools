@@ -323,6 +323,7 @@ install_singbox() {
         UUID=$(get_uuid "$UUID")
         HY2_PASSWORD="$UUID"
 
+
     # ==================================================================
     # 手动模式：要求用户输入
     # ==================================================================
@@ -364,6 +365,7 @@ install_singbox() {
         green "启用跳跃端口范围：$RANGE_PORTS"
     fi
 
+    NODE_NAME=$(get_node_name)
     nginx_port=$((PORT + 1))
     hy2_port="$PORT"
     allow_port "$PORT" udp
@@ -499,7 +501,8 @@ print_node_info_custom() {
         mport_param="${hy2_port}"
     fi
 
-    hy2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${mport_param}"
+   hy2_url="hysteria2://${uuid}@${server_ip}:${hy2_port}/?insecure=1&alpn=h3&obfs=none&mport=${mport_param}#${NODE_NAME}"
+
 
     # 写入 Hy2 原始链接到 url.txt
     echo "$hy2_url" > "$client_dir"
@@ -808,6 +811,7 @@ check_nodes() {
         hy2_url="（未找到原始链接，请重新安装或生成）"
     fi
 
+
     purple "\nHY2 原始链接（从 url.txt 读取）："
     green "$hy2_url"
     echo
@@ -1035,6 +1039,54 @@ main_loop() {
         echo
         read -n 1 -s -r -p "按任意键返回主菜单..."
     done
+}
+
+
+# ======================================================================
+# 节点名称
+# ======================================================================
+get_node_name() {
+
+    # ========== 1. 根据脚本文件名自动确定默认节点名 ==========
+    local DEFAULT_NODE_NAME
+    if [[ "${0##*/}" == *"hy2"* || "${0##*/}" == *"hysteria2"* ]]; then
+        DEFAULT_NODE_NAME="$AUTHOR-hy2"
+    else
+        DEFAULT_NODE_NAME="$AUTHOR"
+    fi
+
+    # ========== 2. 环境变量 NODE_NAME 优先（用户手动指定） ==========
+    if [[ -n "$NODE_NAME" ]]; then
+        echo "$NODE_NAME"
+        return
+    fi
+
+    local node_name=""
+    local country org
+
+    # ========== 3. 自动检测国家与运营商（ipapi.co） ==========
+    node_name=$(
+        curl -fs --max-time 2 https://ipapi.co/json 2>/dev/null |
+        sed -n 's/.*"country":"\([^\"]*\)".*"org":"\([^\"]*\)".*/\1-\2/p' |
+        sed 's/[ ]\+/_/g'
+    )
+
+    # ========== 4. fallback：使用 ip.sb + ipinfo.io/org ==========
+    if [[ -z "$node_name" ]]; then
+        country=$(curl -fs --max-time 2 ip.sb/country 2>/dev/null | tr -d '\r\n')
+        org=$(curl -fs --max-time 2 ipinfo.io/org 2>/dev/null |
+              awk '{$1=""; print $0}' | sed -e 's/^[ ]*//' -e 's/[ ]\+/_/g')
+
+        if [[ -n "$country" && -n "$org" ]]; then
+            node_name="${country}-${org}"
+        fi
+    fi
+
+    # ========== 5. fallback：都失败 → 使用默认名称 ==========
+    [[ -z "$node_name" ]] && node_name="$DEFAULT_NODE_NAME"
+
+    # ========== 6. 输出最终节点名称 ==========
+    echo "$node_name"
 }
 
 # ======================================================================
