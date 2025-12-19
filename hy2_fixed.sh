@@ -1724,10 +1724,31 @@ install_singbox() {
     ping -4 -c1 -W1 8.8.8.8   >/dev/null 2>&1 && ipv4_ok=true
     ping -6 -c1 -W1 2001:4860:4860::8888 >/dev/null 2>&1 && ipv6_ok=true
 
-    dns_servers=()
-    $ipv4_ok && dns_servers+=("\"8.8.8.8\"")
-    $ipv6_ok && dns_servers+=("\"2001:4860:4860::8888\"")
-    [[ ${#dns_servers[@]} -eq 0 ]] && dns_servers+=("\"8.8.8.8\"")
+    dns_servers_json=""
+
+    if $ipv4_ok && $ipv6_ok; then
+        dns_servers_json='
+        {
+            "tag": "dns-google-ipv4",
+            "address": "8.8.8.8"
+        },
+        {
+            "tag": "dns-google-ipv6",
+            "address": "2001:4860:4860::8888"
+        }'
+    elif $ipv4_ok; then
+        dns_servers_json='
+        {
+            "tag": "dns-google-ipv4",
+            "address": "8.8.8.8"
+        }'
+    else
+        dns_servers_json='
+        {
+            "tag": "dns-google-ipv6",
+            "address": "2001:4860:4860::8888"
+        }'
+    fi
 
     if $ipv4_ok && $ipv6_ok; then
         dns_strategy="prefer_ipv4"
@@ -1757,7 +1778,7 @@ cat > "$config_dir" <<EOF
   "log": { "level": "error", "output": "$work_dir/sb.log" },
 
   "dns": {
-    "servers": [ $(IFS=,; echo "${dns_servers[*]}") ],
+    "servers": [ '"$dns_servers_json"' ],
     "strategy": "$dns_strategy"
   },
 
