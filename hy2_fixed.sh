@@ -530,28 +530,28 @@ print_node_info_custom() {
     
 
     # ---------------- 通用订阅 ----------------
-    green "V2rayN / Shadowrocket / Nekobox / Loon / Karing / Sterisand 订阅链接："
+    purple "V2rayN / Shadowrocket / Nekobox / Loon / Karing / Sterisand 订阅链接："
     green "$base_url"
     generate_qr "$base_url"
     yellow "=========================================================================================="
 
     # ---------------- Clash / Mihomo ----------------
     clash_url="https://sublink.eooce.com/clash?config=${base_url}"
-    green "\nClash / Mihomo 订阅链接："
+    purple "\nClash / Mihomo 订阅链接："
     green "$clash_url"
     generate_qr "$clash_url"
     yellow "=========================================================================================="
 
     # ---------------- Sing-box ----------------
     singbox_url="https://sublink.eooce.com/singbox?config=${base_url}"
-    green "\nSing-box 订阅链接："
+    purple "\nSing-box 订阅链接："
     green "$singbox_url"
     generate_qr "$singbox_url"
     yellow "=========================================================================================="
 
     # ---------------- Surge ----------------
     surge_url="https://sublink.eooce.com/surge?config=${base_url}"
-    green "\nSurge 订阅链接："
+    purple "\nSurge 订阅链接："
     green "$surge_url"
     generate_qr "$surge_url"
     yellow "==========================================================================================\n"
