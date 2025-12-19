@@ -1383,6 +1383,7 @@ disable_open_sub() {
         green " 1. 关闭nginx"
         green " 2. 启动nginx"
         green " 3. 修改nginx订阅端口（手动操作）"
+        green " 4. 重启订阅服务（Nginx）"
         yellow "---------------------------------------------"
         green  " 0. 返回主菜单"
         red    "88. 退出脚本"
@@ -1409,6 +1410,15 @@ disable_open_sub() {
 
             3)
                 change_subscribe_port
+                ;;
+
+            4)
+                systemctl restart nginx
+                if systemctl is-active nginx >/dev/null 2>&1; then
+                    green "Nginx已重启成功"
+                else
+                    red "Nginx服务重启失败，请检查 Nginx 配置"
+                fi
                 ;;
 
             0)
