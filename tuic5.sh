@@ -339,16 +339,18 @@ install_singbox() {
     rm -rf "$extracted"
 
     # -------------------- 模式判定 --------------------
-# -------------------- 模式判定 --------------------
+
     is_interactive_mode
     if [[ $? -eq 1 ]]; then
         # 自动模式
+        white "当前模式：自动模式"
         PORT=$(get_port "$PORT")
         UUID=$(get_uuid "$UUID")
     else
         # 交互模式 - 端口
+        white "当前模式：交互模式"
         while true; do
-            read -rp "请输入 TUIC 主端口（UDP）：" USER_PORT
+            read -rp "$(red_input "请输入 TUIC 主端口（UDP）：")" USER_PORT
             if is_valid_port "$USER_PORT" && ! is_port_occupied "$USER_PORT"; then
                 PORT="$USER_PORT"
                 break
@@ -358,16 +360,19 @@ install_singbox() {
 
         # 交互模式 - UUID（必须校验）
         while true; do
-            read -rp "请输入 UUID（回车自动生成）：" USER_UUID
+            read -rp "$(red_input "请输入 UUID（回车自动生成随机 UUID）")" USER_UUID
             if [[ -z "$USER_UUID" ]]; then
-                UUID="$DEFAULT_UUID"
+                UUID=$(cat /proc/sys/kernel/random/uuid)
+                green "已自动生成 UUID：$UUID"
                 break
             fi
+
+            # 用户填写 UUID → 校验格式
             if is_valid_uuid "$USER_UUID"; then
                 UUID="$USER_UUID"
                 break
             else
-                red "UUID 格式不正确"
+                red "UUID 格式不正确，请重新输入。"
             fi
         done
     fi
@@ -413,6 +418,8 @@ cat > "$config_dir" <<EOF
   ]
 }
 EOF
+
+    green "配置文件已生成：$config_dir"
 
     # -------------------- systemd 服务 --------------------
 cat > /etc/systemd/system/sing-box-tuic.service <<EOF
@@ -461,10 +468,10 @@ EOF
 # ======================================================================
 add_nginx_conf() {
 
-    command_exists nginx || {
-        yellow "未安装 nginx，跳过订阅服务配置"
+   if ! command_exists nginx; then
+        red "未安装 Nginx，跳过订阅服务配置"
         return
-    }
+    fi
 
     mkdir -p /etc/nginx/conf.d
 
@@ -512,13 +519,22 @@ server {
 }
 EOF
 
+    # -------------------------
+    # 确保 nginx.conf 包含 conf.d/*.conf
+    # -------------------------
+    if [[ -f /etc/nginx/nginx.conf ]]; then
+        if ! grep -q "conf.d/\*\.conf" /etc/nginx/nginx.conf; then
+            sed -i '/http {/a\    include /etc/nginx/conf.d/*.conf;' /etc/nginx/nginx.conf
+        fi
+    fi
+
     if ! nginx -t >/dev/null 2>&1; then
-        red "Nginx 配置语法错误，请检查订阅配置"
+        red "Nginx 配置语法错误，请检查 /etc/nginx/conf.d/singbox_sub.conf"
         return
     fi
 
     systemctl restart nginx
-    green "订阅服务已启动 → 端口：$nginx_port"
+    green "订阅服务已启动 → 订阅端口：$nginx_port"
 }
 
 # ======================================================================
@@ -526,6 +542,9 @@ EOF
 # ======================================================================
 check_nodes() {
 
+   #  clear  #todo
+    blue "=================== 查看节点信息 ==================="
+    
     [[ ! -f "$config_dir" ]] && { red "未找到配置文件"; return; }
 
     PORT=$(jq -r '.inbounds[0].listen_port' "$config_dir")
@@ -964,6 +983,7 @@ main_loop() {
                 install_common_packages
                 install_singbox
                 add_nginx_conf
+                check_nodes
                 ;;
             2) uninstall_tuic ;;
             3) manage_singbox ;;
