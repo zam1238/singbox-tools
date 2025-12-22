@@ -6,7 +6,7 @@
 # - 自动重启（当前socks5服务支持系统重启后自动拉起socks5服务）
 # 用法如下：
 # 安装：
-#   PORT=16805 USERNAME=oneforall PASSWORD=allforone bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh)
+#   PORT=31000 USERNAME=oneforall PASSWORD=allforone bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh)
 #   
 # 卸载：
 #   bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh) uninstall
@@ -49,6 +49,9 @@ if [[ "${1:-}" == "uninstall" ]]; then
   exit 0
 fi
 
+green(){ echo -e "\e[1;32m$1\033[0m"; }
+yellow(){ echo -e "\e[1;33m$1\033[0m"; }
+blue(){ echo -e "\e[1;34m$1\033[0m"; }
 # ================== 参数检查 ==================
 if [[ -z "${PORT:-}" || -z "${USERNAME:-}" || -z "${PASSWORD:-}" ]]; then
   echo "❌ 缺少参数"
@@ -195,13 +198,13 @@ fi
 
 # ================== 输出 ==================
 echo
-echo "✅ Socks5 服务已启动"
-[[ -n "$IP_V4" ]] && echo "IPv4: socks5://$USERNAME:$PASSWORD@$IP_V4:$PORT"
+green "✅ Socks5 服务已启动"
+[[ -n "$IP_V4" ]] && blue "IPv4: socks5://$USERNAME:$PASSWORD@$IP_V4:$PORT"
 [[ -n "$IP_V6" && "$IPV6_AVAILABLE" -eq 1 ]] && \
-  echo "IPv6: socks5://$USERNAME:$PASSWORD@[$IP_V6]:$PORT"
+  yellow "IPv6: socks5://$USERNAME:$PASSWORD@[$IP_V6]:$PORT"
 
 echo
-echo "管理命令："
-echo "  systemctl status sing-box-socks5"
-echo "  systemctl restart sing-box-socks5"
-echo "  journalctl -u sing-box-socks5 -f"
+yellow "管理命令："
+green "  systemctl status sing-box-socks5"
+green "  systemctl restart sing-box-socks5"
+green "  journalctl -u sing-box-socks5 -f"
