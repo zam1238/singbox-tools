@@ -6,7 +6,7 @@
 # - 自动重启（当前socks5服务支持系统重启后自动拉起socks5服务）
 # 用法如下：
 # 1、安装：
-#   PORT=31000 USERNAME=oneforall PASSWORD=allforone bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh)
+#   PORT=端口号 USERNAME=用户名 PASSWORD=密码 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh)
 #   
 # 2、卸载：
 #   bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/socks5.sh) uninstall
