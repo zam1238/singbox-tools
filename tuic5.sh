@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.1"
+VERSION="v1.0.2"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -704,127 +704,180 @@ EOF
 # ======================================================================
 # 查看节点信息（多客户端 + 二维码，对齐 hy2_fixed.sh）
 # ======================================================================
-# ======================================================================
-# 稳固版 查看节点信息（支持高可用 IP 获取 + 强一致名称）
-# ======================================================================
-# ======================================================================
-# 查看节点信息（稳固版 + 多客户端输出 + 正确节点名称流程）
-# ======================================================================
+
+
+get_ipv4() { 
+    local ip
+    local sources=(
+        "curl -4 -fs https://api.ipify.org"
+        "curl -4 -fs https://ipv4.icanhazip.com"
+        "curl -4 -fs https://ip.sb"
+        "curl -4 -fs https://checkip.amazonaws.com"
+    )
+
+    for src in "${sources[@]}"; do
+        ip=$(eval "$src" 2>/dev/null)
+        [[ -n "$ip" ]] && { echo "$ip"; return; }
+    done
+ }
+
+ get_ipv6() { 
+   local ip
+   local sources6=(
+        "curl -6 -fs https://api64.ipify.org"
+        "curl -6 -fs https://ipv6.icanhazip.com"
+    )
+
+    for src in "${sources6[@]}"; do
+        ip=$(eval "$src" 2>/dev/null)
+        [[ -n "$ip" ]] && { echo "$ip"; return; }
+    done
+ }
+
 check_nodes() {
 
-    blue "=================== 查看节点信息 ==================="
+    blue "=================== 查看节点信息（TUIC v5） ==================="
 
-    [[ ! -f "$config_dir" ]] && { red "未找到配置文件"; return; }
+    [[ ! -f "$config_dir" ]] && {
+        red "未找到配置文件，请先安装 TUIC"
+        return
+    }
 
+    # -------------------------
+    # 基础信息
+    # -------------------------
+    local PORT UUID
     PORT=$(jq -r '.inbounds[0].listen_port' "$config_dir")
     UUID=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir")
 
-    # ======================================================
-    # 节点名称处理（用户自定义 > 自动生成）
-    # ======================================================
+    # -------------------------
+    # 探测 IPv4 / IPv6
+    # -------------------------
+    local ip4 ip6
+    ip4=$(get_ipv4)
+    ip6=$(get_ipv6)
+
+    if [[ -z "$ip4" && -z "$ip6" ]]; then
+        red "无法获取 IPv4 / IPv6 公网地址"
+        return
+    fi
+
+    # -------------------------
+    # 节点名称（基础名）
+    # -------------------------
+    local BASE_NAME
     BASE_NAME=$(get_node_name)
 
-    # 确保可读性（解码-编码是安全校验步骤）
-    BASE_NAME_DECODED=$(urldecode "$(urlencode "$BASE_NAME")")
-    FINAL_NAME="$BASE_NAME_DECODED"
-
-    # 如果启用了跳跃端口，追加 (min-max)
-    if [[ -f "$range_port_file" ]]; then
-        RANGE=$(cat "$range_port_file")
-        FINAL_NAME="${FINAL_NAME}(${RANGE})"
-    fi
-
-    # fragment 编码（用于 TUIC 链接）
-    ENCODED_NAME=$(urlencode "$FINAL_NAME")
-
-    green "节点名称 = $FINAL_NAME"
-    echo ""
-
-    # ======================================================
-    # 获取公网 IP（高可用 fallback）
-    # ======================================================
-    ip=$(get_public_ip)
-
-    if [[ -z "$ip" ]]; then
-        red "无法获取公网 IP，无法生成节点链接。"
-        red "请检查 VPS 出网连通性。"
-        return
-    fi
-
-    # ======================================================
-    # 生成 TUIC URL（主链接）
-    # ======================================================
-    tuic_url="tuic://${UUID}:${UUID}@${ip}:${PORT}?congestion_control=bbr&alpn=h3&allow_insecure=1#${ENCODED_NAME}"
-
-    # 写入 url.txt（最终持久化）
-    echo "$tuic_url" > "$client_dir"
-
-    purple "\nTUIC 原始链接（节点名称：${FINAL_NAME}）"
-    green "$tuic_url"
-    generate_qr "$tuic_url"
-    echo ""
-
-    yellow "====================================================================="
-
-    # ======================================================
-    # 订阅 URL（nginx 提供）
-    # ======================================================
+    # -------------------------
+    # 订阅端口
+    # -------------------------
+    local sub_port
     if [[ -f "$sub_port_file" ]]; then
         sub_port=$(cat "$sub_port_file")
-        green "订阅端口为：${sub_port}"
     else
-        red "未找到订阅端口文件 sub.port"
-        return
+        sub_port=$((PORT + 1))
+        echo "$sub_port" > "$sub_port_file"
     fi
 
-    base_url="http://${ip}:${sub_port}/${UUID}"
+    # -------------------------
+    # 初始化订阅内容
+    # -------------------------
+    > "$sub_file"
 
-    purple "订阅链接（通用）："
-    green "$base_url"
-    generate_qr "$base_url"
+    yellow "========================================================"
 
-    yellow "====================================================================="
+    # =====================================================
+    # IPv4 TUIC 节点
+    # =====================================================
+    local tuic_v4=""
+    if [[ -n "$ip4" ]]; then
+        local name4 enc4
 
-    # ======================================================
-    # 多客户端订阅 URL（Clash / Sing-box / Surge）
-    # ======================================================
-    clash_url="https://sublink.eooce.com/clash?config=${base_url}"
-    singbox_url="https://sublink.eooce.com/singbox?config=${base_url}"
-    surge_url="https://sublink.eooce.com/surge?config=${base_url}"
+        name4="${BASE_NAME}-v4"
+        enc4=$(urlencode "$name4")
 
-    purple "\nClash / Mihomo 订阅："
+        tuic_v4="tuic://${UUID}:${UUID}@${ip4}:${PORT}?congestion_control=bbr&alpn=h3&allow_insecure=1#${enc4}"
+
+        purple "TUIC IPv4 节点（${name4}）"
+        green "$tuic_v4"
+        generate_qr "$tuic_v4"
+        echo ""
+
+        echo "$tuic_v4" >> "$sub_file"
+        echo "$tuic_v4" > "$client_dir"
+    fi
+
+    # =====================================================
+    # IPv6 TUIC 节点（必须使用 []）
+    # =====================================================
+    local tuic_v6=""
+    if [[ -n "$ip6" ]]; then
+        local name6 enc6
+
+        name6="${BASE_NAME}-v6"
+        enc6=$(urlencode "$name6")
+
+        tuic_v6="tuic://${UUID}:${UUID}@[${ip6}]:${PORT}?congestion_control=bbr&alpn=h3&allow_insecure=1#${enc6}"
+
+        purple "TUIC IPv6 节点（${name6}）"
+        green "$tuic_v6"
+        generate_qr "$tuic_v6"
+        echo ""
+
+        echo "$tuic_v6" >> "$sub_file"
+        [[ -z "$tuic_v4" ]] && echo "$tuic_v6" > "$client_dir"
+    fi
+
+    yellow "========================================================"
+
+    # -------------------------
+    # 生成本地订阅（base64）
+    # -------------------------
+    base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
+
+    # -------------------------
+    # 基础订阅 URL（v4 优先，否则 v6）
+    # -------------------------
+    local base_ip sub_url
+    if [[ -n "$ip4" ]]; then
+        base_ip="$ip4"
+    else
+        base_ip="[${ip6}]"
+    fi
+
+    sub_url="http://${base_ip}:${sub_port}/${UUID}"
+
+    purple "基础订阅链接："
+    green "$sub_url"
+    generate_qr "$sub_url"
+    echo ""
+
+    # -------------------------
+    # 多客户端订阅 URL
+    # -------------------------
+    local clash_url singbox_url surge_url
+    clash_url="https://sublink.eooce.com/clash?config=${sub_url}"
+    singbox_url="https://sublink.eooce.com/singbox?config=${sub_url}"
+    surge_url="https://sublink.eooce.com/surge?config=${sub_url}"
+
+    purple "Clash / Mihomo："
     green "$clash_url"
     generate_qr "$clash_url"
+    echo ""
 
-    yellow "====================================================================="
-
-    purple "Sing-box 订阅："
+    purple "Sing-box："
     green "$singbox_url"
     generate_qr "$singbox_url"
+    echo ""
 
-    yellow "====================================================================="
-
-    purple "Surge 订阅："
+    purple "Surge："
     green "$surge_url"
     generate_qr "$surge_url"
-
-    yellow "====================================================================="
-
-    # ======================================================
-    # 状态提示
-    # ======================================================
-    if [[ -f "$range_port_file" ]]; then
-        yellow "提示：节点名称中的跳跃端口区间仅表示当前配置状态。"
-        yellow "系统重启后需重新添加跳跃端口。"
-    fi
-
-    if ! systemctl is-active nginx >/dev/null 2>&1; then
-        yellow "提示：nginx 当前未运行，订阅链接可能无法访问。"
-    fi
-
     echo ""
-    
+
+    yellow "========================================================"
 }
+
 
 
 # ======================================================================
