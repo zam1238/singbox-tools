@@ -10,7 +10,7 @@ export LANG=en_US.UTF-8
 # ============================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.1"
+VERSION="1.0.2"
 
 
 SINGBOX_VERSION="1.12.13"
@@ -1326,15 +1326,41 @@ get_singbox_status_colored() {
 }
 
 
+
+# ==================================================
+#Nginx 状态 =「订阅服务是否可用」
+#这至少应该满足 任意一条：
+#1、nginx service active
+#2、订阅端口存在且被监听
+#3、订阅配置文件存在 + 进程存在
+# ==================================================
 get_nginx_status_colored() {
-    if command_exists nginx && systemctl is-active nginx >/dev/null 2>&1; then
-        green "运行中"
-    elif command_exists nginx; then
-        red "未运行"
-    else
+
+    # nginx 未安装
+    if ! command_exists nginx; then
         red "未安装"
+        return
+    fi
+
+    # 有订阅端口，并且端口正在监听（IPv4 / IPv6 任一）
+    if [[ -f "$sub_port_file" ]]; then
+        local p
+        p=$(cat "$sub_port_file")
+
+        if ss -tuln | grep -q ":$p "; then
+            green "运行中"
+            return
+        fi
+    fi
+
+    # fallback：systemd 状态
+    if systemctl is-active nginx >/dev/null 2>&1; then
+        green "运行中"
+    else
+        red "未运行"
     fi
 }
+
 
 
 main_entry() {
