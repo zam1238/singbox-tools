@@ -2,7 +2,7 @@
 export LANG=en_US.UTF-8
 
 # ======================================================================
-# Sing-box TUIC v5 一键脚本（专属版）
+# Sing-box TUIC v5 一键脚本
 # 作者：littleDoraemon
 # 说明：
 #   - 结构 / 行为 / 主控流程 与 hy2_fixed.sh 对齐
@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.5"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -465,8 +465,51 @@ install_singbox() {
     if [[ $? -eq 1 ]]; then
         # 自动模式
         white "当前模式：自动模式"
-        PORT=$(get_port "$PORT")
-        UUID=$(get_uuid "$UUID")
+
+        # 先尝试使用传入的 PORT
+        if is_valid_port "$PORT" && ! is_port_occupied "$PORT"; then
+            PORT="$PORT"
+        else
+            yellow "检测到 PORT 无效或已被占用，切换为手动输入端口"
+            while true; do
+                read -rp "$(red_input "请输入 TUIC 主端口（UDP）：")" USER_PORT
+                if is_valid_port "$USER_PORT" && ! is_port_occupied "$USER_PORT"; then
+                    PORT="$USER_PORT"
+                    break
+                else
+                    red "端口无效或已被占用，请重新输入"
+                fi
+            done
+        fi
+
+    # ===============================
+    # 自动模式 - UUID 处理（兜底）
+    # ===============================
+    if [[ -n "$UUID" ]]; then
+        if is_valid_uuid "$UUID"; then
+            UUID="$UUID"
+        else
+            yellow "检测到 UUID 无效，请重新输入"
+            while true; do
+                read -rp "$(red_input "请输入 UUID（回车自动生成）：")" USER_UUID
+                if [[ -z "$USER_UUID" ]]; then
+                    UUID=$(cat /proc/sys/kernel/random/uuid)
+                    green "已自动生成 UUID：$UUID"
+                    break
+                fi
+                if is_valid_uuid "$USER_UUID"; then
+                    UUID="$USER_UUID"
+                    break
+                else
+                    red "UUID 格式不正确，请重新输入"
+                fi
+            done
+        fi
+    else
+        # 自动模式但未传 UUID → 自动生成（不打扰用户）
+        UUID=$(cat /proc/sys/kernel/random/uuid)
+    fi
+
     else
         # 交互模式 - 端口
         white "当前模式：交互模式"
@@ -780,6 +823,7 @@ check_nodes() {
     fi
 
     echo ""
+    
 }
 
 
@@ -869,6 +913,9 @@ manage_subscribe_menu() {
 # ======================================================================
 change_config() {
     while true; do
+        # ===============================
+        # 1️⃣ 画菜单（唯一 clear 的地方）
+        # ===============================
         clear
         blue "========== 修改节点配置 =========="
         echo ""
@@ -882,15 +929,32 @@ change_config() {
         red   "88. 退出脚本"
         echo ""
 
+        # ===============================
+        # 2️⃣ 读取用户选择
+        # ===============================
         read -rp "请选择操作：" sel
 
+        # ===============================
+        # 3️⃣ 执行动作（动作自己负责 pause）
+        # ===============================
         case "$sel" in
             1)
                 change_main_tuic_port
+                
                 ;;
             2)
-                read -rp "$(red_input "请输入新的 UUID：")" new_uuid
-                is_valid_uuid "$new_uuid" || { red "UUID 格式错误"; continue; }
+                read -rp "$(red_input "请输入新的 UUID（回车自动生成）：")" new_uuid
+
+                if [[ -z "$new_uuid" ]]; then
+                    new_uuid=$(cat /proc/sys/kernel/random/uuid)
+                    green "已自动生成 UUID：$new_uuid"
+                else
+                    is_valid_uuid "$new_uuid" || {
+                        red "UUID 格式错误"
+                        read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
+                        continue
+                    }
+                fi
 
                 jq ".inbounds[0].users[0].uuid=\"$new_uuid\" | .inbounds[0].users[0].password=\"$new_uuid\"" \
                     "$config_dir" > /tmp/tuic_cfg && mv /tmp/tuic_cfg "$config_dir"
@@ -898,6 +962,7 @@ change_config() {
                 systemctl restart sing-box-tuic
                 systemctl restart nginx
                 green "UUID 已成功修改"
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
                 ;;
             3)
                 read -rp "$(red_input "请输入新的节点名称：")" new_name
@@ -905,6 +970,7 @@ change_config() {
                 ;;
             4)
                 add_jump_port
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
                 ;;
             5)
                 if [[ -f "$range_port_file" ]]; then
@@ -912,7 +978,6 @@ change_config() {
                     min="${rp%-*}"
                     max="${rp#*-}"
 
-                    # 删除所有 INPUT 放行规则
                     while iptables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null; do
                         iptables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
                     done
@@ -920,49 +985,73 @@ change_config() {
                         ip6tables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
                     done
 
-                    # 删除 NAT 跳跃规则
                     remove_jump_rule
-
-                    # 删除持久文件
                     rm -f "$range_port_file"
 
                     green "跳跃端口已彻底删除：${min}-${max}"
                 else
                     yellow "当前未启用跳跃端口"
                 fi
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
                 ;;
-
-            0) return ;;
-            88) exit 0 ;;
-            *) red "无效输入，请重新选择" ;;
+            0)
+                return
+                ;;
+            88)
+                exit 0
+                ;;
+            *)
+                red "无效输入，请重新选择"
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
+                ;;
         esac
     done
 }
 
 
-change_main_tuic_port(){
-    read -rp "$(red_input "请输入新的 TUIC 主端口（UDP）：")" new_port
-    is_valid_port "$new_port" || { red "端口无效"; continue; }
-    is_port_occupied "$new_port" && { red "端口已被占用"; continue; }
+change_main_tuic_port() {
+    local new_port
+    local old_port
+
+    while true; do
+        read -rp "$(red_input "请输入新的 TUIC 主端口（UDP）：")" new_port
+
+        if ! is_valid_port "$new_port"; then
+            red "端口无效，请输入 1-65535 之间的数字"
+            continue
+        fi
+
+        if is_port_occupied "$new_port"; then
+            red "端口已被占用，请更换一个端口"
+            continue
+        fi
+
+        break
+    done
 
     # 旧主端口
     old_port=$(jq -r '.inbounds[0].listen_port' "$config_dir")
 
     # 更新配置文件
-    jq ".inbounds[0].listen_port=$new_port" "$config_dir" > /tmp/tuic_cfg && mv /tmp/tuic_cfg "$config_dir"
+    jq ".inbounds[0].listen_port=$new_port" "$config_dir" > /tmp/tuic_cfg \
+        && mv /tmp/tuic_cfg "$config_dir"
 
     # 放行新端口
     allow_port "$new_port"
 
-    # -------------------------
+    # 删除旧端口的放行规则
+    iptables -D INPUT -p udp --dport "$old_port" -j ACCEPT 2>/dev/null
+    ip6tables -D INPUT -p udp --dport "$old_port" -j ACCEPT 2>/dev/null
+
+
     # 自动刷新跳跃端口 NAT 映射
-    # -------------------------
     refresh_jump_ports_for_new_main_port "$new_port"
 
     # 重启服务
     systemctl restart sing-box-tuic
 
     green "TUIC 主端口已从 ${old_port} 修改为：${new_port}"
+    read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
 }
 
 # ======================================================================
@@ -994,6 +1083,7 @@ change_node_name() {
     # 3. 调用 check_nodes → 统一生成 TUIC URL（含节点名称）
     # ======================================================
     check_nodes
+    read -n 1 -s -r -p "按任意键返回菜单..."
 }
 
 # ======================================================================
@@ -1143,7 +1233,7 @@ quick_install() {
 menu() {
     clear
     blue "===================================================="
-    gradient "       Sing-box 一键脚本（TUIC v5 专属版）"
+    gradient "       Sing-box 一键脚本（TUIC v5版本）"
     green    "       作者：$AUTHOR"
     yellow   "       版本：$VERSION"
     blue "===================================================="
@@ -1186,10 +1276,13 @@ main_loop() {
                 check_nodes
                 # 持久化节点名称
                 get_node_name > "$work_dir/node_name"
+                read -n 1 -s -r -p "安装完成！按任意键进入主菜单..." </dev/tty
                 ;;
             2) uninstall_tuic ;;
             3) manage_singbox ;;
-            4) check_nodes ;;
+            4) check_nodes 
+               read -n 1 -s -r -p "安装完成！按任意键进入主菜单..." </dev/tty
+            ;;
             5) change_config ;;
             6) manage_subscribe_menu ;;
             88) exit 0 ;;
@@ -1205,7 +1298,8 @@ main() {
     is_interactive_mode
     if [[ $? -eq 1 ]]; then
         quick_install
-        read -n 1 -s -r -p "安装完成！按任意键进入主菜单..."
+
+        read -n 1 -s -r -p "安装完成！按任意键进入主菜单..." </dev/tty
         main_loop
     else
         main_loop
