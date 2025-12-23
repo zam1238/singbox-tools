@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.7"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -823,6 +823,7 @@ check_nodes() {
     fi
 
     echo ""
+    
 }
 
 
@@ -1233,7 +1234,9 @@ main_loop() {
                 ;;
             2) uninstall_tuic ;;
             3) manage_singbox ;;
-            4) check_nodes ;;
+            4) check_nodes 
+               read -n 1 -s -r -p "安装完成！按任意键进入主菜单..."
+            ;;
             5) change_config ;;
             6) manage_subscribe_menu ;;
             88) exit 0 ;;
