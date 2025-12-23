@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.2"
+VERSION="v1.0.1"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -913,6 +913,9 @@ manage_subscribe_menu() {
 # ======================================================================
 change_config() {
     while true; do
+        # ===============================
+        # 1️⃣ 画菜单（唯一 clear 的地方）
+        # ===============================
         clear
         blue "========== 修改节点配置 =========="
         echo ""
@@ -926,12 +929,18 @@ change_config() {
         red   "88. 退出脚本"
         echo ""
 
+        # ===============================
+        # 2️⃣ 读取用户选择
+        # ===============================
         read -rp "请选择操作：" sel
 
+        # ===============================
+        # 3️⃣ 执行动作（动作自己负责 pause）
+        # ===============================
         case "$sel" in
             1)
                 change_main_tuic_port
-                read -n 1 -s -r -p "安装完成！按任意键进入主菜单..." </dev/tty
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
                 ;;
             2)
                 read -rp "$(red_input "请输入新的 UUID（回车自动生成）：")" new_uuid
@@ -940,13 +949,16 @@ change_config() {
                     new_uuid=$(cat /proc/sys/kernel/random/uuid)
                     green "已自动生成 UUID：$new_uuid"
                 else
-                    is_valid_uuid "$new_uuid" || { red "UUID 格式错误"; continue; }
+                    is_valid_uuid "$new_uuid" || {
+                        red "UUID 格式错误"
+                        read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
+                        continue
+                    }
                 fi
-                green "uuid 检查通过"
+
                 jq ".inbounds[0].users[0].uuid=\"$new_uuid\" | .inbounds[0].users[0].password=\"$new_uuid\"" \
                     "$config_dir" > /tmp/tuic_cfg && mv /tmp/tuic_cfg "$config_dir"
 
-                green "tuic服务重启中"
                 systemctl restart sing-box-tuic
                 systemctl restart nginx
                 green "UUID 已成功修改"
@@ -966,7 +978,6 @@ change_config() {
                     min="${rp%-*}"
                     max="${rp#*-}"
 
-                    # 删除所有 INPUT 放行规则
                     while iptables -C INPUT -p udp --dport ${min}:${max} -j ACCEPT &>/dev/null; do
                         iptables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
                     done
@@ -974,27 +985,25 @@ change_config() {
                         ip6tables -D INPUT -p udp --dport ${min}:${max} -j ACCEPT
                     done
 
-                    # 删除 NAT 跳跃规则
                     remove_jump_rule
-
-                    # 删除持久文件
                     rm -f "$range_port_file"
 
                     green "跳跃端口已彻底删除：${min}-${max}"
-                    read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
                 else
                     yellow "当前未启用跳跃端口"
-                    read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
-
-                
                 fi
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
                 ;;
-
-            0) return ;;
-            88) exit 0 ;;
-            *) red "无效输入，请重新选择"
-               read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
-             ;;
+            0)
+                return
+                ;;
+            88)
+                exit 0
+                ;;
+            *)
+                red "无效输入，请重新选择"
+                read -n 1 -s -r -p "按任意键返回菜单..." </dev/tty
+                ;;
         esac
     done
 }
