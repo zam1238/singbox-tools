@@ -10,7 +10,7 @@ export LANG=en_US.UTF-8
 # ============================================================
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.2"
+VERSION="1.0.3"
 
 
 SINGBOX_VERSION="1.12.13"
@@ -1168,15 +1168,15 @@ main_menu() {
 get_singbox_status_colored() {
     # 未安装：systemd 服务文件不存在
     if ! systemctl list-unit-files --type=service 2>/dev/null | grep -q '^sing-box\.service'; then
-        red "✖ 未安装"
+        red "未安装"
         return
     fi
 
     # 已安装，正在运行
     if systemctl is-active sing-box >/dev/null 2>&1; then
-        green "● 运行中"
+        green "运行中"
     else
-        red "● 未运行"
+        red "未运行"
     fi
 }
 
