@@ -25,8 +25,8 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.15"
-SINGBOX_VERSION="1.12.16"
+VERSION="v2.3.16"
+SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
 WORK_DIR="/etc/sing-box-vless-reality"
@@ -222,6 +222,28 @@ install_common_packages() {
 }
 
 
+download_singbox() {
+  local ver="$1"
+  local arch="$2"
+  local out="$3"
+
+  local urls=(
+    "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+    "https://mirror.ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+    "https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+  )
+
+  for u in "${urls[@]}"; do
+    yellow "尝试下载：$u"
+    if curl -fL --retry 2 --connect-timeout 10 -o "$out" "$u"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+
 
 # =====================================================
 # 安装 sing-box
@@ -231,22 +253,43 @@ install_singbox(){
   case "$ARCH" in
     x86_64) ARCH=amd64 ;;
     aarch64) ARCH=arm64 ;;
-    *) red "不支持架构"; exit 1 ;;
+    *) red "不支持的架构：$ARCH"; exit 1 ;;
   esac
 
   mkdir -p "$WORK_DIR"
-
   local tmpdir
   tmpdir=$(mktemp -d)
 
-  curl -fsSL -o "$tmpdir/sb.tgz" \
-    https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-linux-${ARCH}.tar.gz
+  # ===== 下载（方案 A：镜像 + fallback）=====
+  if ! download_singbox "$SINGBOX_VERSION" "$ARCH" "$tmpdir/sb.tgz"; then
+    red "无法下载 sing-box（版本 ${SINGBOX_VERSION} / 架构 ${ARCH}）"
+    red "请检查 GitHub 访问或版本号是否存在"
+    rm -rf "$tmpdir"
+    exit 1
+  fi
 
-  tar -xzf "$tmpdir/sb.tgz" -C "$tmpdir"
+  # ===== 校验压缩包 =====
+  if ! tar -tzf "$tmpdir/sb.tgz" >/dev/null 2>&1; then
+    red "sing-box 压缩包损坏或不是有效的 tar.gz"
+    rm -rf "$tmpdir"
+    exit 1
+  fi
 
-  mv "$tmpdir"/sing-box-*/sing-box "$WORK_DIR/sing-box"
+  # ===== 解压 =====
+  tar -xzf "$tmpdir/sb.tgz" -C "$tmpdir" || {
+    red "解压 sing-box 失败"
+    rm -rf "$tmpdir"
+    exit 1
+  }
+
+  # ===== 安装二进制 =====
+  if ! mv "$tmpdir"/sing-box-*/sing-box "$WORK_DIR/sing-box"; then
+    red "未在压缩包中找到 sing-box 可执行文件"
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+
   chmod +x "$WORK_DIR/sing-box"
-
   rm -rf "$tmpdir"
 }
 
