@@ -20,7 +20,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.2"
+VERSION="v2.3.3"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -831,6 +831,7 @@ menu(){
     green  " 6. 管理订阅服务"
     yellow "----------------------------------------"
     red    " 88. 退出脚本"
+    echo ""
     read -rp "选择：" c
     case "$c" in
       1) interactive_install ;;
@@ -893,7 +894,8 @@ manage_singbox() {
     green " 3. 重启"
     yellow "----------------------------------------"
     green " 0. 返回"
-    red   " 88. 退出"
+    red   " 88. 退出脚本"
+    echo ""
     echo ""
 
     read -rp "$(red_input "请选择：")" sel
