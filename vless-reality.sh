@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.23"
+VERSION="v2.3.25"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -46,6 +46,7 @@ REALITY_PUBKEY_FILE="$WORK_DIR/reality_public.key"
 REALITY_SID_FILE="$WORK_DIR/reality_short_id"
 
 REALITY_PRIVATE_FILE="$WORK_DIR/reality_private.key"
+
 
 
 
@@ -1150,14 +1151,14 @@ get_nginx_status_colored() {
     fi
 }
 
-
 get_subscribe_status_colored() {
-    if [[ -f "$sub_nginx_conf" ]]; then
+    if [[ -f "$NGX_CONF" ]]; then
         green "已启用"
     else
         yellow "未启用"
     fi
 }
+
 
 manage_singbox() {
   while true; do
