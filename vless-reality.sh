@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.19"
+VERSION="v2.3.20"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -44,6 +44,9 @@ NGX_LINK="/etc/nginx/conf.d/vless_reality_sub.conf"
 
 REALITY_PUBKEY_FILE="$WORK_DIR/reality_public.key"
 REALITY_SID_FILE="$WORK_DIR/reality_short_id"
+
+REALITY_PRIVATE_FILE="$WORK_DIR/reality_private.key"
+
 
 
 DEFAULT_SNI="www.bing.com"
@@ -403,6 +406,7 @@ gen_reality(){
 
   echo "$PUBLIC_KEY" > "$REALITY_PUBKEY_FILE"
   echo "$SHORT_ID"  > "$REALITY_SID_FILE"
+  echo "$PRIVATE_KEY" > "$REALITY_PRIVATE_FILE"
 }
 
 
@@ -430,8 +434,8 @@ cat > "$CONFIG" <<EOF
           "server": "$(get_sni)",
           "server_port": 443
         },
-        "private_key": "$PRIVATE_KEY",
-        "short_id": ["$SHORT_ID"]
+        "private_key": "$(cat "$REALITY_PRIVATE_FILE")",
+        "short_id": ["$(cat "$REALITY_SID_FILE")"]
       }
     }
   }],
@@ -807,9 +811,9 @@ change_sni(){
 
   green " 1. www.bing.com        （默认 / 推荐）"
   green " 2. www.microsoft.com"
-  green " 3. www.cloudflare.com"
+  green " 3. www.office.com"
   green " 4. www.apple.com"
-  green " 5. www.amazon.com"
+  green " 5. www.visa.com"
   yellow "----------------------------------"
   green " 6. 自定义输入"
   red   " 0. 取消修改"
