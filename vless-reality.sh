@@ -154,13 +154,19 @@ init_dirs(){
 }
 
 init_node_name(){
-  [[ -f "$NODE_NAME_FILE" ]] && return
+  # 非交互式 / 显式传入 NODE_NAME → 永远覆盖
   if [[ -n "$NODE_NAME" ]]; then
     echo "$NODE_NAME" > "$NODE_NAME_FILE"
-  else
-    echo "VLESS-Reality" > "$NODE_NAME_FILE"
+    return
   fi
+
+  # 未传 NODE_NAME → 只有在文件不存在时才初始化
+  [[ -f "$NODE_NAME_FILE" ]] && return
+
+    # 默认节点名：AUTHOR-vless-Reality
+  echo "${AUTHOR}-vless-Reality" > "$NODE_NAME_FILE"
 }
+
 
 init_sni(){
   [[ -f "$SNI_FILE" ]] && return
