@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.13"
+VERSION="v2.3.14"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -883,7 +883,7 @@ manage_subscribe_menu() {
 menu(){
     clear
     blue "===================================================="
-    gradient "       Sing-box 一键脚本（vless-reality版）"
+    green "       Sing-box 一键脚本（vless-reality版）"
     green    "       作者：$AUTHOR"
     yellow   "       版本：$VERSION"
     blue "===================================================="
