@@ -20,7 +20,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.1"
+VERSION="v2.3.2"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -54,6 +54,17 @@ purple(){ echo -e "\e[1;35m$1\033[0m"; }
 red_input(){ printf "\e[1;91m%s\033[0m" "$1"; }
 
 pause(){ read -n 1 -s -r -p "按任意键继续..." </dev/tty; }
+
+gradient() {
+    local text="$1"
+    local colors=(196 202 208 214 220 190 82 46 51 39 33)
+    local i=0
+    for ((n=0;n<${#text};n++)); do
+        printf "\033[38;5;${colors[i]}m%s\033[0m" "${text:n:1}"
+        i=$(( (i+1)%${#colors[@]} ))
+    done
+    echo
+}
 
 [[ $EUID -ne 0 ]] && { red "请使用 root 运行"; exit 1; }
 
