@@ -24,7 +24,7 @@ BIN_FILE="$INSTALL_DIR/sing-box-socks5"
 LOG_FILE="$INSTALL_DIR/run.log"
 
 SERVICE_SYSTEMD="/etc/systemd/system/sing-box-socks5.service"
-SERVICE_OPENRC="/etc/init.d/sing-box-socks5"
+SERVICE_OPENRC="/etc/init.d/sing-box-socks5.service"
 
 SB_VERSION="1.12.13"
 SB_VER="v${SB_VERSION}"
@@ -36,13 +36,18 @@ green(){ echo -e "\e[1;32m$1\033[0m"; }
 yellow(){ echo -e "\e[1;33m$1\033[0m"; }
 blue(){ echo -e "\e[1;34m$1\033[0m"; }
 
-gen_username() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10; }
+gen_username() {
+  tr -dc 'A-Za-z0-9' </dev/urandom | head -c 10
+}
+
+# 不包含 = 和 -
 gen_password() {
   tr -dc 'A-Za-z0-9!@#%^_+' </dev/urandom | head -c 10
 }
 
-
-gen_port()     { shuf -i 20000-50000 -n 1; }
+gen_port() {
+  shuf -i 20000-50000 -n 1
+}
 
 check_port_free() {
   ss -lnt 2>/dev/null | awk '{print $4}' | grep -q ":$1$"
@@ -72,7 +77,7 @@ uninstall() {
 }
 
 ########################
-# 参数处理
+# 参数处理（重点修复端口循环）
 ########################
 handle_params() {
   IS_TTY=0
@@ -84,40 +89,50 @@ handle_params() {
     INTERACTIVE=0
   fi
 
-  # 非 TTY 自动退化
   [[ "$INTERACTIVE" == "1" && "$IS_TTY" == "0" ]] && INTERACTIVE=0
 
   if [[ "$INTERACTIVE" == "1" ]]; then
     echo "[INFO] 交互式安装模式（回车自动生成）"
 
+    # ---------- 端口 ----------
     if [[ -z "${PORT:-}" ]]; then
       while true; do
-        read -rp "请输入端口号（回车自动生成）: " PORT
+        read -rp "请输入端口号（回车自动生成）: " PORT || {
+          echo
+          echo "❌ 输入中断，请重新输入端口"
+          continue
+        }
+
         if [[ -z "$PORT" ]]; then
           PORT="$(gen_port)"
           echo "[INFO] 已生成端口: $PORT"
           break
         fi
+
         if [[ "$PORT" =~ ^[0-9]+$ ]] && check_port_free "$PORT"; then
           break
         fi
-        echo "❌ 端口非法或已被占用"
+
+        echo "❌ 端口非法或已被占用，请重新输入"
         PORT=""
       done
     fi
 
+    # ---------- 用户名 ----------
     if [[ -z "${USERNAME:-}" ]]; then
-      read -rp "请输入用户名（回车自动生成）: " USERNAME
+      read -rp "请输入用户名（回车自动生成）: " USERNAME || USERNAME=""
       [[ -z "$USERNAME" ]] && USERNAME="$(gen_username)"
       echo "[INFO] 用户名: $USERNAME"
     fi
 
+    # ---------- 密码 ----------
     if [[ -z "${PASSWORD:-}" ]]; then
-      read -rsp "请输入密码（回车自动生成）: " PASSWORD
+      read -rsp "请输入密码（回车自动生成）: " PASSWORD || PASSWORD=""
       echo
       [[ -z "$PASSWORD" ]] && PASSWORD="$(gen_password)"
       echo "[INFO] 密码已生成"
     fi
+
   else
     echo "[INFO] 非交互式安装模式（自动生成缺失参数）"
     PORT="${PORT:-$(gen_port)}"
