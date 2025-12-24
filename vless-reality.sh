@@ -754,6 +754,7 @@ interactive_install(){
 
   install_common
   refresh_all
+  
 }
 
 print_subscribe_status() {
@@ -908,7 +909,11 @@ menu(){
     echo ""
     read -rp "选择：" c
     case "$c" in
-      1) interactive_install ;;
+      1) interactive_install
+        blue "========== 安装完成 · 节点信息 =========="
+        echo ""
+        check_nodes
+       ;;
       2) uninstall_singbox ;;
       3) manage_singbox ;;
       4) check_nodes ;;
