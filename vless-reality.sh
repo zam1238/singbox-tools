@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.22"
+VERSION="v2.3.23"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -898,6 +898,11 @@ quick_install(){
 
   install_common
   refresh_all
+
+   # ===== 强制启用订阅 =====
+  systemctl start nginx
+  systemctl enable nginx
+  build_subscribe_conf
 }
 
 
