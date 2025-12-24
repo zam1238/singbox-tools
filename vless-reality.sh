@@ -7,20 +7,25 @@ export LANG=en_US.UTF-8
 # 说明：
 #   - 支持自动 / 交互模式
 #   - 支持跳跃端口：使用nat端口转发给主端口，也就是服务端一下子给你把跳跃端口范围的端口都指向了主端口号的转发(跟hy2的服务器天然支持跳跃端口功能不太一样)
-#   - 支持环境变量：PORT / UUID / RANGE_PORTS / NODE_NAME
+#   - #   - 支持环境变量： PORT / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID
+# 
 #  
 #  1、安装方式（2种）
 #     1.1 交互式菜单安装：
 #     curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh -o vless-reality.sh && chmod +x vless-reality.sh && ./vless-reality.sh
 #    
-#     1.2 非交互式全自动安装:
+#     1.2 非交互式全自动安装(支持环境变量： PORT / UUID / NODE_NAME / SNI/ REALITY_PBK / REALITY_SID):
 #     PORT=31090 SNI=www.visa.com NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/vless-reality.sh)
 #
+# Optional env(可选环境变量):
+#   REALITY_PBK   Reality public key
+#   REALITY_SID   Reality short id (hex)
+# 
 # 
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.3"
+VERSION="v2.3.6"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -272,19 +277,28 @@ uninstall_singbox(){
 # =====================================================
 # Reality key
 # =====================================================
+
 gen_reality(){
-  local k
-  k=$("$WORK_DIR/sing-box" generate reality-keypair)
+  if [[ -n "$REALITY_PBK" && -n "$REALITY_SID" ]]; then
+    # 仅为 private_key 生成
+    local k
+    k=$("$WORK_DIR/sing-box" generate reality-keypair)
+    PRIVATE_KEY=$(awk '/PrivateKey/ {print $2}' <<<"$k")
 
-  PRIVATE_KEY=$(awk '/PrivateKey/ {print $2}' <<<"$k")
-  PUBLIC_KEY=$(awk '/PublicKey/ {print $2}' <<<"$k")
-
-  # 生成 short_id（8 位 hex，符合主流客户端）
-  SHORT_ID=$(openssl rand -hex 4)
+    PUBLIC_KEY="$REALITY_PBK"
+    SHORT_ID="$REALITY_SID"
+  else
+    local k
+    k=$("$WORK_DIR/sing-box" generate reality-keypair)
+    PRIVATE_KEY=$(awk '/PrivateKey/ {print $2}' <<<"$k")
+    PUBLIC_KEY=$(awk '/PublicKey/ {print $2}' <<<"$k")
+    SHORT_ID=$(openssl rand -hex 8)
+  fi
 
   echo "$PUBLIC_KEY" > "$REALITY_PUBKEY_FILE"
-  echo "$SHORT_ID" > "$REALITY_SID_FILE"
+  echo "$SHORT_ID"  > "$REALITY_SID_FILE"
 }
+
 
 # =====================================================
 # config.json
