@@ -16,7 +16,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.1"
+VERSION="v1.0.10"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -28,6 +28,12 @@ client_dir="${work_dir}/url.txt"
 sub_file="${work_dir}/sub.txt"
 sub_port_file="${work_dir}/sub.port"
 range_port_file="${work_dir}/range_ports"
+
+sub_nginx_conf="$work_dir/singbox_tuic_sub.conf"
+nginx_conf_link="/etc/nginx/conf.d/singbox_tuic_sub.conf"
+
+
+
 
 NAT_COMMENT="tuic_jump"
 
@@ -630,41 +636,26 @@ EOF
 # ======================================================================
 # 安装 / 更新 nginx 订阅服务（与 hy2_fixed.sh 等价）
 # ======================================================================
-add_nginx_conf() {
 
-   if ! command_exists nginx; then
-        red "未安装 Nginx，跳过订阅服务配置"
-        return
-    fi
+build_subscribe_conf() {
 
-    mkdir -p /etc/nginx/conf.d
+    [[ ! -f "$sub_file" ]] && {
+        red "订阅内容不存在，请先生成节点"
+        return 1
+    }
 
-    # -------------------------
-    # 订阅端口（sub.port）
-    # -------------------------
+    local sub_port
     if [[ -f "$sub_port_file" ]]; then
-        nginx_port=$(cat "$sub_port_file")
+        sub_port=$(cat "$sub_port_file")
     else
-        nginx_port=$((PORT + 1))
-
-        if is_port_occupied "$nginx_port"; then
-            for p in $(seq $((nginx_port + 1)) 65000); do
-                if ! is_port_occupied "$p"; then
-                    nginx_port="$p"
-                    break
-                fi
-            done
-        fi
-
-        echo "$nginx_port" > "$sub_port_file"
+        sub_port=$((PORT + 1))
+        echo "$sub_port" > "$sub_port_file"
     fi
 
-    rm -f /etc/nginx/conf.d/singbox_tuic_sub.conf
-
-cat > /etc/nginx/conf.d/singbox_tuic_sub.conf <<EOF
+cat > "$sub_nginx_conf" <<EOF
 server {
-    listen $nginx_port;
-    listen [::]:$nginx_port;
+    listen ${sub_port};
+    listen [::]:${sub_port};
 
     server_name sb_tuic_sub.local;
 
@@ -672,8 +663,8 @@ server {
     add_header Pragma "no-cache";
     add_header Expires "0";
 
-    location /$UUID {
-        alias $sub_file;
+    location /${UUID} {
+        alias ${sub_file};
         default_type text/plain;
     }
 
@@ -683,23 +674,19 @@ server {
 }
 EOF
 
-    # -------------------------
-    # 确保 nginx.conf 包含 conf.d/*.conf
-    # -------------------------
-    if [[ -f /etc/nginx/nginx.conf ]]; then
-        if ! grep -q "conf.d/\*\.conf" /etc/nginx/nginx.conf; then
-            sed -i '/http {/a\    include /etc/nginx/conf.d/*.conf;' /etc/nginx/nginx.conf
-        fi
-    fi
+    ln -sf "$sub_nginx_conf" "$nginx_conf_link"
 
-    if ! nginx -t >/dev/null 2>&1; then
-        red "Nginx 配置语法错误，请检查 /etc/nginx/conf.d/singbox_sub.conf"
-        return
+    if systemctl is-active nginx >/dev/null 2>&1; then
+        systemctl reload nginx
+        green "订阅服务已生成并生效"
+    else
+        yellow "Nginx 未运行，订阅配置已生成，启动 Nginx 后生效"
     fi
-
-    systemctl restart nginx
-    green "订阅服务已启动 → 订阅端口：$nginx_port"
 }
+
+
+
+
 
 # ======================================================================
 # 查看节点信息（多客户端 + 二维码，对齐 hy2_fixed.sh）
@@ -736,42 +723,43 @@ get_ipv4() {
 
 
 check_nodes() {
-
-    blue "=================== 查看节点信息（TUIC v5 / 双栈） ==================="
+    local mode="$1"   # silent / empty
 
     [[ ! -f "$config_dir" ]] && {
         red "未找到配置文件，请先安装 TUIC"
+        [[ "$mode" != "silent" ]] && pause_return
         return
     }
 
-    # -------------------------------------------------
+    # =====================================================
     # 基础信息
-    # -------------------------------------------------
+    # =====================================================
     local PORT UUID
     PORT=$(jq -r '.inbounds[0].listen_port' "$config_dir")
     UUID=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir")
 
-    # -------------------------------------------------
+    # =====================================================
     # 探测 IPv4 / IPv6
-    # -------------------------------------------------
+    # =====================================================
     local ip4 ip6
     ip4=$(get_ipv4)
     ip6=$(get_ipv6)
 
     if [[ -z "$ip4" && -z "$ip6" ]]; then
         red "无法获取 IPv4 / IPv6 公网地址"
+        [[ "$mode" != "silent" ]] && pause_return
         return
     fi
 
-    # -------------------------------------------------
-    # 节点名称（基础名）
-    # -------------------------------------------------
+    # =====================================================
+    # 节点名称
+    # =====================================================
     local BASE_NAME
     BASE_NAME=$(get_node_name)
 
-    # -------------------------------------------------
-    # 订阅端口
-    # -------------------------------------------------
+    # =====================================================
+    # 订阅端口（仅用于展示）
+    # =====================================================
     local sub_port
     if [[ -f "$sub_port_file" ]]; then
         sub_port=$(cat "$sub_port_file")
@@ -780,15 +768,15 @@ check_nodes() {
         echo "$sub_port" > "$sub_port_file"
     fi
 
-    # -------------------------------------------------
-    # 初始化订阅内容
-    # -------------------------------------------------
+    # =====================================================
+    # 初始化订阅数据
+    # =====================================================
     > "$sub_file"
 
     yellow "========================================================"
 
     # =====================================================
-    # IPv4 TUIC 节点
+    # TUIC IPv4 节点
     # =====================================================
     local tuic_v4=""
     if [[ -n "$ip4" ]]; then
@@ -800,7 +788,7 @@ check_nodes() {
 
         purple "TUIC IPv4 节点（${name4}）"
         green "$tuic_v4"
-        generate_qr "$tuic_v4"
+        [[ "$mode" != "silent" ]] && generate_qr "$tuic_v4"
         echo ""
 
         echo "$tuic_v4" >> "$sub_file"
@@ -808,7 +796,7 @@ check_nodes() {
     fi
 
     # =====================================================
-    # IPv6 TUIC 节点（必须使用 []）
+    # TUIC IPv6 节点
     # =====================================================
     local tuic_v6=""
     if [[ -n "$ip6" ]]; then
@@ -820,7 +808,7 @@ check_nodes() {
 
         purple "TUIC IPv6 节点（${name6}）"
         green "$tuic_v6"
-        generate_qr "$tuic_v6"
+        [[ "$mode" != "silent" ]] && generate_qr "$tuic_v6"
         echo ""
 
         echo "$tuic_v6" >> "$sub_file"
@@ -829,88 +817,53 @@ check_nodes() {
 
     yellow "========================================================"
 
-    # -------------------------------------------------
-    # 本地订阅文件（base64）
-    # -------------------------------------------------
+    # =====================================================
+    # 本地订阅（base64）
+    # =====================================================
     base64 -w0 "$sub_file" > "${work_dir}/sub_base64.txt"
 
-    # -------------------------------------------------
-    # 基础订阅 URL（IPv4 / IPv6 分离）
-    # -------------------------------------------------
-    local sub_url_v4="" sub_url_v6=""
+    # =====================================================
+    # 订阅展示（仅在订阅启用时）
+    # =====================================================
+    if is_subscribe_enabled; then
+        local sub_url_v4="" sub_url_v6=""
 
-    if [[ -n "$ip4" ]]; then
-        sub_url_v4="http://${ip4}:${sub_port}/${UUID}"
+        if [[ -n "$ip4" ]]; then
+            sub_url_v4="http://${ip4}:${sub_port}/${UUID}"
+            purple "基础订阅（IPv4）："
+            green "$sub_url_v4"
+            [[ "$mode" != "silent" ]] && generate_qr "$sub_url_v4"
+            echo ""
+        fi
 
-        purple "基础订阅（IPv4）："
-        green "$sub_url_v4"
-        generate_qr "$sub_url_v4"
-        echo ""
-    fi
+        if [[ -n "$ip6" ]]; then
+            sub_url_v6="http://[${ip6}]:${sub_port}/${UUID}"
+            purple "基础订阅（IPv6）："
+            green "$sub_url_v6"
+            [[ "$mode" != "silent" ]] && generate_qr "$sub_url_v6"
+            echo ""
+        fi
 
-    if [[ -n "$ip6" ]]; then
-        sub_url_v6="http://[${ip6}]:${sub_port}/${UUID}"
+        yellow "========================================================"
 
-        purple "基础订阅（IPv6）："
-        green "$sub_url_v6"
-        generate_qr "$sub_url_v6"
-        echo ""
-    fi
-
-    yellow "========================================================"
-
-    # -------------------------------------------------
-    # 客户端订阅（IPv4）
-    # -------------------------------------------------
-    if [[ -n "$sub_url_v4" ]]; then
-        local clash_v4 singbox_v4 surge_v4
-        clash_v4="https://sublink.eooce.com/clash?config=${sub_url_v4}"
-        singbox_v4="https://sublink.eooce.com/singbox?config=${sub_url_v4}"
-        surge_v4="https://sublink.eooce.com/surge?config=${sub_url_v4}"
-
-        purple "Clash / Mihomo（IPv4）："
-        green "$clash_v4"
-        generate_qr "$clash_v4"
-        echo ""
-
-        purple "Sing-box（IPv4）："
-        green "$singbox_v4"
-        generate_qr "$singbox_v4"
-        echo ""
-
-        purple "Surge（IPv4）："
-        green "$surge_v4"
-        generate_qr "$surge_v4"
-        echo ""
-    fi
-
-    # -------------------------------------------------
-    # 客户端订阅（IPv6）
-    # -------------------------------------------------
-    if [[ -n "$sub_url_v6" ]]; then
-        local clash_v6 singbox_v6 surge_v6
-        clash_v6="https://sublink.eooce.com/clash?config=${sub_url_v6}"
-        singbox_v6="https://sublink.eooce.com/singbox?config=${sub_url_v6}"
-        surge_v6="https://sublink.eooce.com/surge?config=${sub_url_v6}"
-
-        purple "Clash / Mihomo（IPv6）："
-        green "$clash_v6"
-        generate_qr "$clash_v6"
-        echo ""
-
-        purple "Sing-box（IPv6）："
-        green "$singbox_v6"
-        generate_qr "$singbox_v6"
-        echo ""
-
-        purple "Surge（IPv6）："
-        green "$surge_v6"
-        generate_qr "$surge_v6"
-        echo ""
+        # 客户端订阅（与 hy2 统一抽象）
+        print_client_subscribe_links "$sub_url_v4" "IPv4" "$mode"
+        print_client_subscribe_links "$sub_url_v6" "IPv6" "$mode"
+    else
+        if [[ "$mode" != "silent" ]]; then
+            yellow "订阅服务当前未启用"
+            echo ""
+            blue  "提示：如需使用订阅功能，请前往以下菜单手动启用："
+            green "  主菜单 → 管理订阅服务"
+            green "           → 启用 / 重建订阅服务"
+        fi
     fi
 
     yellow "========================================================"
+
+    [[ "$mode" != "silent" ]] && pause_return
 }
+
 
 
 # ======================================================================
@@ -948,51 +901,119 @@ manage_singbox() {
 manage_subscribe_menu() {
     while true; do
         clear
-        blue "========== 管理订阅服务（Nginx） =========="
+        blue "========== 订阅服务管理（TUIC / Nginx） =========="
         echo ""
-        green " 1. 关闭 nginx"
-        green " 2. 启动 nginx"
-        green " 3. 修改订阅端口"
-        green " 4. 重启订阅服务（nginx）"
+
+        # 订阅状态（唯一事实源）
+        print_subscribe_status
+        echo ""
+
+        # ---------- nginx 服务管理 ----------
+        green " 1. 启动 Nginx"
+        green " 2. 停止 Nginx"
+        green " 3. 重启 Nginx"
+
+        # ---------- 订阅管理 ----------
         yellow "---------------------------------------------"
-        green " 0. 返回主菜单"
+        green " 4. 启用 / 重建订阅服务"
+        green " 5. 修改订阅端口"
+        green " 6. 关闭订阅服务"
+
+        yellow "---------------------------------------------"
+        green " 0. 返回上级菜单"
         red   "88. 退出脚本"
         echo ""
 
         read -rp "请选择操作：" sel
-
         case "$sel" in
+            # ===== nginx 原生操作 =====
             1)
-                systemctl stop nginx
-                green "nginx 服务已关闭"
-                ;;
-            2)
                 systemctl start nginx
                 systemctl is-active nginx >/dev/null 2>&1 \
-                    && green "nginx 服务已启动" \
-                    || red "nginx 启动失败"
+                    && green "Nginx 已启动" \
+                    || red "Nginx 启动失败"
+                pause_return
+                ;;
+            2)
+                systemctl stop nginx
+                green "Nginx 已停止"
+                pause_return
                 ;;
             3)
-                read -rp "请输入新的订阅端口（HTTP / TCP）：" new_port
-                is_valid_port "$new_port" || { red "端口无效"; continue; }
-                is_port_occupied "$new_port" && { red "端口被占用"; continue; }
-
-                echo "$new_port" > "$sub_port_file"
-                add_nginx_conf
-                green "订阅端口已修改为：$new_port"
-                ;;
-            4)
                 systemctl restart nginx
                 systemctl is-active nginx >/dev/null 2>&1 \
-                    && green "nginx 已重启成功" \
-                    || red "nginx 重启失败"
+                    && green "Nginx 已重启" \
+                    || red "Nginx 重启失败"
+                pause_return
                 ;;
-            0) return ;;
-            88) exit 0 ;;
-            *) red "无效输入，请重新选择" ;;
+
+            # ===== 订阅管理 =====
+            4)
+                build_subscribe_conf
+                pause_return
+                ;;
+            5)
+                change_subscribe_port
+                pause_return
+                ;;
+            6)
+                disable_subscribe
+                pause_return
+                ;;
+
+            0)
+                return
+                ;;
+            88)
+                exit 0
+                ;;
+            *)
+                red "无效输入"
+                pause_return
+                ;;
         esac
     done
 }
+
+
+
+disable_subscribe() {
+    rm -f "$sub_nginx_conf"
+    rm -f "$nginx_conf_link"
+
+    if systemctl is-active nginx >/dev/null 2>&1; then
+        systemctl reload nginx
+    fi
+
+    green "订阅服务已关闭"
+}
+
+
+change_subscribe_port() {
+    read -rp "$(red_input "请输入新的订阅端口：")" new_port
+
+    if ! is_valid_port "$new_port"; then
+        red "端口无效"
+        return
+    fi
+
+    if is_port_occupied "$new_port"; then
+        red "端口已被占用"
+        return
+    fi
+
+    echo "$new_port" > "$sub_port_file"
+
+    if is_subscribe_enabled; then
+        build_subscribe_conf
+        green "订阅端口已修改为：$new_port"
+    else
+        yellow "订阅未启用，端口已保存，启用订阅后生效"
+    fi
+}
+
+
+
 
 # ======================================================================
 # 修改节点配置（与 hy2_fixed.sh 对齐）
@@ -1307,7 +1328,7 @@ quick_install() {
     install_common_packages
     install_singbox
     handle_range_ports
-    add_nginx_conf
+    build_subscribe_conf
     check_nodes
     # 持久化节点名称
     get_node_name > "$work_dir/node_name"
@@ -1327,9 +1348,11 @@ menu() {
 
     sb="$(get_singbox_status_colored)"
     ng="$(get_nginx_status_colored)"
+    ss="$(get_subscribe_status_colored)"
 
     yellow " Sing-box 状态：$sb"
     yellow " Nginx 状态：   $ng"
+    yellow " 订阅 状态：   $ss"
     echo ""
 
     green  " 1. 安装 Sing-box (TUIC)"
@@ -1366,43 +1389,38 @@ get_singbox_status_colored() {
 
 
 get_nginx_status_colored() {
-
-    local conf="/etc/nginx/conf.d/singbox_hy2_sub.conf"
-
-    # 1️⃣ nginx 未安装
     if ! command_exists nginx; then
         red "未安装"
         return
     fi
 
-    # 2️⃣ 订阅配置不存在（等价于订阅服务未启用）
-    if [[ ! -f "$conf" ]]; then
+    if systemctl is-active nginx >/dev/null 2>&1; then
+        green "运行中"
+    else
         red "未运行"
-        return
     fi
-
-    # 3️⃣ nginx 进程不存在
-    if ! pgrep -x nginx >/dev/null 2>&1; then
-        red "未运行"
-        return
-    fi
-
-    # 4️⃣ 检查订阅端口是否被 nginx 监听
-    if [[ -f "$sub_port_file" ]]; then
-        local p
-        p=$(cat "$sub_port_file")
-
-        # 只认 nginx 监听
-        if ss -tulnp 2>/dev/null | grep -q "nginx.*:$p"; then
-            green "运行中"
-            return
-        fi
-    fi
-
-    # 5️⃣ nginx 活着，但订阅不可用
-    yellow "未运行"
 }
 
+
+get_subscribe_status_colored() {
+    if [[ -f "$sub_nginx_conf" ]]; then
+        green "已启用"
+    else
+        yellow "未启用"
+    fi
+}
+
+print_subscribe_status() {
+    if [[ -f "$sub_nginx_conf" ]]; then
+        green "当前订阅状态：已启用"
+    else
+        yellow "当前订阅状态：未启用"
+    fi
+}
+
+is_subscribe_enabled() {
+    [[ -f "$sub_nginx_conf" ]]
+}
 
 
 
