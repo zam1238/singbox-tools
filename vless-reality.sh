@@ -641,7 +641,7 @@ quick_install(){
 interactive_install(){
   # -------- 端口 --------
   while true; do
-    read -rp "$(red_input "端口（回车自动生成）：")" PORT
+    read -rp "$(red_input "请输入vless端口（留空回车则自动生成）：")" PORT
 
     # 回车 → 自动生成端口
     if [[ -z "$PORT" ]]; then
@@ -663,7 +663,7 @@ interactive_install(){
 
   # -------- UUID --------
   while true; do
-    read -rp "$(red_input "UUID（回车自动生成）：")" UUID
+    read -rp "$(red_input "请输入UUID（留空回车则自动生成）：")" UUID
 
     if [[ -z "$UUID" ]]; then
       UUID=$(cat /proc/sys/kernel/random/uuid)
