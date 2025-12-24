@@ -2,7 +2,7 @@
 export LANG=en_US.UTF-8
 
 # ======================================================================
-# Sing-box TUIC v5 一键脚本
+# Sing-box vless-reality 一键脚本
 # 作者：littleDoraemon
 # 说明：
 #   - 支持自动 / 交互模式
@@ -644,7 +644,7 @@ interactive_install(){
 menu(){
     clear
     blue "===================================================="
-    gradient "       Sing-box 一键脚本（TUIC v5版本）"
+    gradient "       Sing-box 一键脚本（vless-reality版）"
     green    "       作者：$AUTHOR"
     yellow   "       版本：$VERSION"
     blue "===================================================="
@@ -657,8 +657,8 @@ menu(){
     yellow " Nginx 状态：   $ng"
     yellow " 订阅 状态：   $ss"
     echo ""
-    green " 1. 安装"
-    red   " 2. 卸载"
+    green " 1. 安装Sing-box"
+    red   " 2. 卸载Sing-box"
     yellow "----------------------------"
     green " 3. 管理服务"
     green " 4. 查看节点"
