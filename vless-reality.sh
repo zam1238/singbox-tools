@@ -25,7 +25,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v2.3.10"
+VERSION="v2.3.11"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -976,19 +976,14 @@ main_loop() {
 main() {
   is_interactive
   if [[ $? -eq 1 ]]; then
-    # 非交互式（自动模式）
     quick_install
-
-    echo ""
-    yellow "安装完成，按任意键进入菜单..."
-    pause          # ⭐ 关键：这里暂停，但不清屏
-
-    main_loop      # 之后才进入 menu → clear
+    check_nodes
+    exit 0
   else
-    # 交互模式
     main_loop
   fi
 }
+
 
 
 
