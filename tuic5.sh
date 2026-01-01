@@ -7,14 +7,14 @@ export LANG=en_US.UTF-8
 # 说明：
 #   - 支持自动 / 交互模式
 #   - 支持跳跃端口：使用nat端口转发给主端口，也就是服务端一下子给你把跳跃端口范围的端口都指向了主端口号的转发(跟hy2的服务器天然支持跳跃端口功能不太一样)
-#   - 支持环境变量：PORT / UUID / RANGE_PORTS / NODE_NAME
+#   - 支持环境变量：PORT (必填) /NGINX_PORT(必填)/ UUID / RANGE_PORTS / NODE_NAME
 #  
 #  1、安装方式（2种）
 #     1.1 交互式菜单安装：
 #     curl -fsSL https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh -o tuic5.sh && chmod +x tuic5.sh && ./tuic5.sh
 #    
 #     1.2 非交互式全自动安装:
-#     PORT=31020 RANGE_PORTS=40000-41000 NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh)
+#     PORT=31020   NGINX_PORT=31021 RANGE_PORTS=40000-41000 NODE_NAME="小叮当的节点" bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/tuic5.sh)
 #
 # 
 #  
@@ -24,7 +24,7 @@ export LANG=en_US.UTF-8
 # 基本信息
 # ======================================================================
 AUTHOR="littleDoraemon"
-VERSION="v1.0.2"
+VERSION="v1.0.4(2026-01-01)"
 SINGBOX_VERSION="1.12.13"
 
 # ======================================================================
@@ -111,6 +111,15 @@ generate_qr() {
     [[ -z "$link" ]] && return
     yellow "二维码链接："
     echo "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${link}"
+}
+
+
+# ======================= 统一退出 =======================
+exit_script() {
+    echo ""
+    green "感谢使用本脚本,再见👋"
+    echo ""
+    exit 0
 }
 
 # ======================================================================
@@ -238,13 +247,13 @@ service_active() {
 load_env_vars() {
     while IFS='=' read -r key value; do
         case "$key" in
-            PORT|UUID|RANGE_PORTS|NODE_NAME)
+            PORT|NGINX_PORT|UUID|RANGE_PORTS|NODE_NAME)
                 if [[ -n "$value" && "$value" =~ ^[a-zA-Z0-9\.\-\:_/]+$ ]]; then
                     export "$key=$value"
                 fi
                 ;;
         esac
-    done < <(env | grep -E '^(PORT|UUID|RANGE_PORTS|NODE_NAME)=')
+    done < <(env | grep -E '^(PORT|NGINX_PORT|UUID|RANGE_PORTS|NODE_NAME)=')
 }
 load_env_vars
 
@@ -252,7 +261,7 @@ load_env_vars
 # 自动 / 交互模式判定（原样）
 # ======================================================================
 is_interactive_mode() {
-    if [[ -n "$PORT" || -n "$UUID" || -n "$RANGE_PORTS" || -n "$NODE_NAME" ]]; then
+    if [[ -n "$PORT" || -n "$NGINX_PORT" || -n "$UUID" || -n "$RANGE_PORTS" || -n "$NODE_NAME" ]]; then
         return 1   # 自动模式
     else
         return 0   # 交互模式
@@ -260,6 +269,39 @@ is_interactive_mode() {
 }
 
 DEFAULT_UUID=$(cat /proc/sys/kernel/random/uuid)
+
+
+
+prompt_valid_port() {
+    local var_name="$1"
+    local prompt_text="$2"
+    local port
+
+    port="${!var_name}"
+
+    while true; do
+        if [[ -z "$port" ]]; then
+            read -rp "$(red_input "$prompt_text")" port
+        fi
+
+        if ! is_valid_port "$port"; then
+            red "端口无效，请输入 1-65535"
+            port=""
+            continue
+        fi
+
+        if is_port_occupied "$port"; then
+            red "端口 $port 已被占用"
+            port=""
+            continue
+        fi
+
+        break
+    done
+
+    printf -v "$var_name" '%s' "$port"
+}
+
 
 # ======================================================================
 # UUID / 端口工具（原样）
@@ -366,6 +408,38 @@ allow_port() {
 
     green "已放行 UDP 端口：$port"
 }
+
+
+allow_tcp_port() {
+    local port="$1"
+
+    iptables  -C INPUT -p tcp --dport "$port" -j ACCEPT || \
+    iptables  -I INPUT -p tcp --dport "$port" -j ACCEPT
+
+    ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT || \
+    ip6tables -I INPUT -p tcp --dport "$port" -j ACCEPT
+}
+
+
+# ======================================================================
+# 防火墙回收 TCP 端口（Nginx 订阅端口）
+# ======================================================================
+remove_tcp_port() {
+    local port="$1"
+
+    # IPv4
+    while iptables -C INPUT -p tcp --dport "$port" -j ACCEPT &>/dev/null; do
+        iptables -D INPUT -p tcp --dport "$port" -j ACCEPT
+    done
+
+    # IPv6
+    while ip6tables -C INPUT -p tcp --dport "$port" -j ACCEPT &>/dev/null; do
+        ip6tables -D INPUT -p tcp --dport "$port" -j ACCEPT
+    done
+
+    green "已回收 TCP 端口：$port"
+}
+
 
 # ======================================================================
 # 添加跳跃端口 NAT 规则（IPv4 + IPv6）
@@ -604,6 +678,15 @@ install_singbox() {
             done
         fi
 
+        # -------- 订阅端口（NGINX_PORT）--------
+        if is_valid_port "$NGINX_PORT" && ! is_port_occupied "$NGINX_PORT"; then
+            :
+        else
+            yellow "NGINX_PORT 无效或被占用，切换为交互输入"
+            prompt_valid_port "NGINX_PORT" "请输入 TUIC 订阅端口（TCP）："
+        fi
+
+
     # ===============================
     # 自动模式 - UUID 处理（兜底）
     # ===============================
@@ -665,6 +748,8 @@ install_singbox() {
 
     # 放行 TUIC 主端口
     allow_port "$PORT"
+
+
 
 
     # -------------------- TLS 证书 --------------------
@@ -760,17 +845,21 @@ build_subscribe_conf() {
     }
 
     local sub_port
+    # 订阅端口统一逻辑（对齐 hy2）
     if [[ -f "$sub_port_file" ]]; then
-        sub_port=$(cat "$sub_port_file")
+        NGINX_PORT=$(cat "$sub_port_file")
     else
-        sub_port=$((PORT + 1))
-        echo "$sub_port" > "$sub_port_file"
+        prompt_valid_port "NGINX_PORT" "请输入 TUIC 订阅端口（TCP）："
+        echo "$NGINX_PORT" > "$sub_port_file"
     fi
+
+    # ✅ 放行订阅端口（TCP）
+   allow_tcp_port "$NGINX_PORT"
 
 cat > "$sub_nginx_conf" <<EOF
 server {
-    listen ${sub_port};
-    listen [::]:${sub_port};
+    listen ${NGINX_PORT};
+    listen [::]:${NGINX_PORT};
 
     server_name sb_tuic_sub.local;
 
@@ -941,19 +1030,9 @@ check_nodes() {
     # 订阅端口（仅用于展示）
     # =====================================================
     local sub_port
-    if [[ -f "$sub_port_file" ]]; then
-        sub_port=$(cat "$sub_port_file")
-    else
-        sub_port=$((PORT + 1))
-        echo "$sub_port" > "$sub_port_file"
-    fi
+   [[ -f "$sub_port_file" ]] && sub_port=$(cat "$sub_port_file")
 
-    # =====================================================
-    # 初始化订阅数据
-    # =====================================================
-    > "$sub_file"
 
-    yellow "========================================================"
 
     # =====================================================
     # TUIC IPv4 节点
@@ -1042,6 +1121,8 @@ check_nodes() {
     yellow "========================================================"
 
     [[ "$mode" != "silent" ]] && pause_return
+
+     return 0
 }
 
 
@@ -1069,7 +1150,7 @@ manage_singbox() {
             2) service_stop ${SERVICE_NAME} ;;
             3) service_restart ${SERVICE_NAME} ;;
             0) return ;;
-            88) exit 0 ;;
+            88) exit_script;;
             *) red "无效输入，请重新选择" ;;
         esac
     done
@@ -1134,7 +1215,7 @@ manage_subscribe_menu() {
                 return
                 ;;
             88)
-                exit 0
+                exit_script
                 ;;
             *)
                 red "无效输入"
@@ -1146,21 +1227,40 @@ manage_subscribe_menu() {
 
 
 
-
 disable_subscribe() {
+
+    local old_port
+
+    # 读取当前订阅端口（如果存在）
+    if [[ -f "$sub_port_file" ]]; then
+        old_port=$(cat "$sub_port_file")
+    fi
+
+    # 删除 nginx 订阅配置
     rm -f "$sub_nginx_conf"
     rm -f "$nginx_conf_link"
 
+    # 回收订阅端口防火墙规则（TCP）
+    if [[ -n "$old_port" ]]; then
+        remove_tcp_port "$old_port"
+    fi
+
+    # 重载 nginx（仅在 nginx 存在且运行时）
     if command_exists nginx && service_active nginx; then
         service_restart nginx
     fi
-
 
     green "订阅服务已关闭"
 }
 
 
+
 change_subscribe_port() {
+
+    local old_port
+
+    [[ -f "$sub_port_file" ]] && old_port=$(cat "$sub_port_file")
+
     read -rp "$(red_input "请输入新的订阅端口：")" new_port
 
     if ! is_valid_port "$new_port"; then
@@ -1173,11 +1273,20 @@ change_subscribe_port() {
         return
     fi
 
+    # 写入新端口
     echo "$new_port" > "$sub_port_file"
+
+    # 回收旧端口（如果存在且不同）
+    if [[ -n "$old_port" && "$old_port" != "$new_port" ]]; then
+        remove_tcp_port "$old_port"
+    fi
+
+    # 放行新端口
+    allow_tcp_port "$new_port"
 
     if is_subscribe_enabled; then
         build_subscribe_conf
-        green "订阅端口已修改为：$new_port"
+        green "订阅端口已从 ${old_port:-无} 修改为：$new_port"
     else
         yellow "订阅未启用，端口已保存，启用订阅后生效"
     fi
@@ -1276,7 +1385,7 @@ change_config() {
                 return
                 ;;
             88)
-                exit 0
+               exit_script
                 ;;
             *)
                 red "无效输入，请重新选择"
@@ -1624,6 +1733,61 @@ is_subscribe_enabled() {
 
 
 
+add_nginx_conf() {
+
+    # 必须已有节点订阅内容
+    if [[ ! -f "$sub_file" ]]; then
+        red "订阅内容不存在，请先生成节点"
+        return 1
+    fi
+
+    # 如果已有订阅端口，则直接使用；否则要求输入
+    if [[ -f "$sub_port_file" ]]; then
+        NGINX_PORT=$(cat "$sub_port_file")
+    else
+        prompt_valid_port "NGINX_PORT" "请输入 TUIC 订阅端口（TCP）："
+        echo "$NGINX_PORT" > "$sub_port_file"
+    fi
+
+    # 放行订阅端口（TCP）
+    allow_tcp_port "$NGINX_PORT"
+
+    # 生成 nginx 订阅配置（与 build_subscribe_conf 同构）
+cat > "$sub_nginx_conf" <<EOF
+server {
+    listen ${NGINX_PORT};
+    listen [::]:${NGINX_PORT};
+
+    server_name sb_tuic_sub.local;
+
+    add_header Cache-Control "no-cache, must-revalidate";
+    add_header Pragma "no-cache";
+    add_header Expires "0";
+
+    location /${UUID} {
+        alias ${sub_file};
+        default_type text/plain;
+    }
+
+    location / {
+        return 404;
+    }
+}
+EOF
+
+    # 建立 nginx conf.d / http.d 链接
+    ln -sf "$sub_nginx_conf" "$nginx_conf_link"
+
+    # 重载 nginx
+    if command_exists nginx && service_active nginx; then
+        service_restart nginx
+        green "订阅服务已启用并生效"
+    else
+        yellow "订阅配置已生成，Nginx 启动后生效"
+    fi
+}
+
+
 # ======================================================================
 # 主循环（与 hy2_fixed.sh 对齐）
 # ======================================================================
@@ -1648,7 +1812,7 @@ main_loop() {
             ;;
             5) change_config ;;
             6) manage_subscribe_menu ;;
-            88) exit 0 ;;
+            88) exit_script;;
             *) red "无效选项，请重新输入" ;;
         esac
     done
