@@ -1085,7 +1085,7 @@ change_config() {
     clear
     blue "========== 修改节点配置 =========="
     echo ""
-    green " 1. 修改监听端口"
+    green " 1. 修改vless端口"
     green " 2. 修改 UUID"
     green " 3. 修改节点名称"
     green " 4. 修改 SNI"
@@ -1108,7 +1108,7 @@ change_config() {
 }
 
 change_port(){
-  read -rp "$(red_input "请输入新端口号(回车则默认自动生成)：")" p
+  read -rp "$(red_input "请输入vless新端口号(回车则默认自动生成)：")" p
 
   if ! is_port "$p"; then
     red "端口格式无效"
