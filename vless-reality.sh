@@ -26,7 +26,7 @@ export LANG=en_US.UTF-8
 # ======================================================================
 
 AUTHOR="littleDoraemon"
-VERSION="v1.0.13(2026-01-01)"
+VERSION="v1.0.14(2026-01-01)"
 SINGBOX_VERSION="1.12.13"
 
 SERVICE_NAME="sing-box-vless-reality"
@@ -1107,8 +1107,9 @@ change_config() {
   done
 }
 
+
 change_port(){
-  read -rp "$(red_input "请输入vless新端口号(回车则默认自动生成)：")" p
+  read -rp "$(red_input "请输入 vless 新端口号：")" p
 
   if ! is_port "$p"; then
     red "端口格式无效"
@@ -1125,10 +1126,19 @@ change_port(){
   local old_port
   old_port=$(jq -r '.inbounds[0].listen_port' "$CONFIG")
 
+  # 1️⃣ 更新配置
   PORT="$p"
   jq ".inbounds[0].listen_port=$PORT" "$CONFIG" > /tmp/cfg && mv /tmp/cfg "$CONFIG"
 
-  green "监听端口已从 ${old_port} 修改为：${PORT}"
+  # 2️⃣ 放行新端口
+  allow_tcp_port "$PORT"
+
+  # 3️⃣ 回收旧端口（如果不同）
+  if [[ -n "$old_port" && "$old_port" != "$PORT" ]]; then
+    remove_tcp_port "$old_port"
+  fi
+
+  green "VLESS 端口已修改：${old_port} → ${PORT}"
   yellow "正在应用配置…"
 
   refresh_all
