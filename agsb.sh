@@ -3,7 +3,7 @@ export LANG=en_US.UTF-8
 
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.1(2026-01-03)"
+VERSION="1.0.2(2026-01-03)"
 
 
 # ================== Argo 参数快照（彻底隔离 shell 环境） ==================
@@ -772,8 +772,11 @@ cip(){
         purple "----------- Argo -----------"
         vmess_json=$(printf '{"v":"2","ps":"vmess-argo","add":"%s","port":"443","id":"%s","aid":"0","net":"ws","type":"none","host":"%s","path":"/%s-vm","tls":"tls","sni":"%s"}' \
             "$cdn_domain" "$uuid" "$ARG_AG_VM_DOMAIN" "$uuid" "$ARG_AG_VM_DOMAIN")
+        
+        vmess_b64=$(echo "$vmess_json" | base64 | tr -d '\n')
+
         yellow "【VMess Argo】"
-        content= "vmess://$(echo "$vmess_json" | base64 -w0)"
+        content="vmess://$vmess_b64"
         green "$content"
         generate_qr "$content"
         echo
