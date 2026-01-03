@@ -3,7 +3,7 @@ export LANG=en_US.UTF-8
 
 
 AUTHOR="littleDoraemon"
-VERSION="1.0.5(2026-01-03)"
+VERSION="1.0.1(2026-01-03)"
 
 # ================== 颜色函数 ==================
 white(){ echo -e "\033[1;37m$1\033[0m"; }
@@ -67,14 +67,14 @@ showmode(){
     yellow   "       版本：$VERSION"
     blue "===================================================="
     echo ""
-    echo "------------------------------------------------"
-    echo "agsb list    查看节点"
-    echo "agsb res     重启"
-    echo "agsb ups     更新 sing-box"
-    echo "agsb rep     重置(会先卸载然后再安装)"
-    echo "agsb del     卸载"
-    echo "agsb help     查看功能菜单"
-    echo "------------------------------------------------"
+    yellow "------------------------------------------------"
+    yellow "agsb list    查看节点"
+    yellow "agsb res     重启"
+    yellow "agsb ups     更新 sing-box"
+    yellow "agsb rep     重置(会先卸载然后再安装)"
+    yellow "agsb del     卸载"
+    yellow "agsb help     查看功能菜单"
+    yellow "------------------------------------------------"
 }
 
 check_root(){
@@ -432,6 +432,7 @@ EOF
 command="$HOME/agsb/sing-box"
 command_args="run -c $HOME/agsb/sb.json"
 command_background=yes
+pidfile="/run/sing-box.pid"
 EOF
         chmod +x /etc/init.d/sing-box
         rc-update add sing-box default
@@ -576,7 +577,7 @@ start_argo_vm(){
     install_cloudflared
 
     # systemd
-   if command -v systemctl >/dev/null 2>&1; then
+   if command -v systemctl >/dev/null 2>&1 && pidof systemd >/dev/null 2>&1; then
         create_argo_vm_service
         echo "VM_PORT=$port_vm_ws" > "$HOME/agsb/argo-vm.env"
         echo "VM_TOKEN=$agk_vm" >> "$HOME/agsb/argo-vm.env"
@@ -609,7 +610,7 @@ start_argo_tr(){
     install_cloudflared
 
     # systemd
-    if pidof systemd >/dev/null 2>&1; then
+    if command -v systemctl >/dev/null 2>&1 && pidof systemd >/dev/null 2>&1; then
         create_argo_tr_service
         echo "TR_PORT=$port_tr" > "$HOME/agsb/argo-tr.env"
         echo "TR_TOKEN=$agk_tr" >> "$HOME/agsb/argo-tr.env"
@@ -688,17 +689,17 @@ cip(){
 
 
     echo
-    echo "================ 节点信息 ================"
+    purple "================ 节点信息 ================"
 
     # ================= IPv4 =================
     if [ -n "$server_v4" ]; then
-        echo "----------- IPv4 -----------"
+        purple "----------- IPv4 -----------"
 
         # Hysteria2
         if [ -f "$HOME/agsb/port_hy2" ]; then
             port_hy2=$(cat "$HOME/agsb/port_hy2")
-            echo "【Hysteria2】"
-            echo "hysteria2://$uuid@$server_v4:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain"
+            yellow "【Hysteria2】"
+            green "hysteria2://$uuid@$server_v4:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain"
             echo
         fi
 
@@ -707,21 +708,21 @@ cip(){
             port_vlr=$(cat "$HOME/agsb/port_vlr")
             public_key=$(awk 'NR==2{print $2}' "$HOME/agsb/reality.key")
             short_id=$(cat "$HOME/agsb/short_id")
-            echo "【VLESS Reality】"
-            echo "vless://$uuid@$server_v4:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id"
+            yellow "【VLESS Reality】"
+            green "vless://$uuid@$server_v4:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id"
             echo
         fi
     fi
 
     # ================= IPv6 =================
     if [ -n "$server_v6" ]; then
-        echo "----------- IPv6 -----------"
+        purple "----------- IPv6 -----------"
 
         # Hysteria2
         if [ -f "$HOME/agsb/port_hy2" ]; then
             port_hy2=$(cat "$HOME/agsb/port_hy2")
-            echo "【Hysteria2】"
-            echo "hysteria2://$uuid@$server_v6:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain"
+            yellow "【Hysteria2】"
+            green "hysteria2://$uuid@$server_v6:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain"
             echo
         fi
 
@@ -730,29 +731,29 @@ cip(){
             port_vlr=$(cat "$HOME/agsb/port_vlr")
             public_key=$(awk 'NR==2{print $2}' "$HOME/agsb/reality.key")
             short_id=$(cat "$HOME/agsb/short_id")
-            echo "【VLESS Reality】"
-            echo "vless://$uuid@$server_v6:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id"
+            yellow "【VLESS Reality】"
+            green "vless://$uuid@$server_v6:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id"
             echo
         fi
     fi
 
     # ================= Argo（不分 IP） =================
     if [ -n "$argo_vm" ] && [ -n "$agn_vm" ]; then
-        echo "----------- Argo -----------"
+        purple "----------- Argo -----------"
         vmess_json=$(printf '{"v":"2","ps":"vmess-argo","add":"%s","port":"443","id":"%s","aid":"0","net":"ws","type":"none","host":"%s","path":"/%s-vm","tls":"tls","sni":"%s"}' \
             "$cdn_domain" "$uuid" "$agn_vm" "$uuid" "$agn_vm")
-        echo "【VMess Argo】"
-        echo "vmess://$(echo "$vmess_json" | base64 -w0)"
+        yellow "【VMess Argo】"
+        green "vmess://$(echo "$vmess_json" | base64 -w0)"
         echo
     fi
 
     if [ -n "$argo_tr" ] && [ -n "$agn_tr" ]; then
-        echo "【Trojan Argo】"
-        echo "trojan://$uuid@$cdn_domain:443?security=tls&type=ws&host=$agn_tr&path=/$uuid-tr&sni=$agn_tr&fp=chrome"
+        yellow "【Trojan Argo】"
+        green "trojan://$uuid@$cdn_domain:443?security=tls&type=ws&host=$agn_tr&path=/$uuid-tr&sni=$agn_tr&fp=chrome"
         echo
     fi
 
-    echo "=========================================="
+    purple "==============节点信息到这里就结束了======================="
 }
 
 
