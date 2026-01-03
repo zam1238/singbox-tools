@@ -13,48 +13,8 @@ else
         [ "$vlr" = yes ] || [ "$vmp" = yes ] || [ "$trp" = yes ] || [ "$hyp" = yes ] || { echo "提示：未安装agsb脚本，请在脚本前至少设置一个协议变量哦，再见！💣"; exit; }
     fi
 fi
-export uuid=${uuid:-''}; export port_vm_ws=${vmpt:-''}; export port_tr=${trpt:-''}; export port_hy2=${hypt:-''}; export port_vlr=${vlrt:-''}; export cdnym=${cdnym:-''}; export argo=${argo:-''}; export ARGO_DOMAIN=${agn:-''}; export ARGO_AUTH=${agk:-''}; export ippz=${ippz:-''}; export name=${name:-''}; export oap=${oap:-''}
 
-install_deps
 
-v46url="https://icanhazip.com"
-agsburl="https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh"
-
-# ================== 颜色函数 ==================
-white(){ echo -e "\033[1;37m$1\033[0m"; }
-red(){ echo -e "\e[1;91m$1\033[0m"; }
-green(){ echo -e "\e[1;32m$1\033[0m"; }
-yellow(){ echo -e "\e[1;33m$1\033[0m"; }
-blue(){ echo -e "\e[1;34m$1\033[0m"; }
-purple(){ echo -e "\e[1;35m$1\033[0m"; }
-
-gradient() {
-    local text="$1"
-    local colors=(196 202 208 214 220 190 82 46 51 39 33)
-    local i=0
-    for ((n=0;n<${#text};n++)); do
-        printf "\033[38;5;${colors[i]}m%s\033[0m" "${text:n:1}"
-        i=$(( (i+1)%${#colors[@]} ))
-    done
-    echo
-}
-# ================== 颜色函数 ==================
-VERSION="1.0.1(2026-01-03)"
-showmode(){
-    blue "===================================================="
-    gradient "       agsb 一键脚本（vmess/trojan Argo选1,vless+hy2直连）"
-    green    "       作者：$AUTHOR"
-    yellow   "       版本：$VERSION"
-    blue "===================================================="
- 
-    yellow "主脚本：bash <(curl -Ls ${agsburl}) 或 bash <(wget -qO- ${agsburl})"
-    yellow "显示节点信息命令：agsb list"
-    yellow "重置变量组命令： agsb rep"
-    yellow "更新Singbox内核命令：agsb ups"
-    yellow "重启脚本命令：agsb res"
-    yellow "卸载脚本命令：agsb del"
-    echo "---------------------------------------------------------"
-}
 install_deps() {
     echo "🔍 正在检测系统依赖…"
 
@@ -144,6 +104,51 @@ install_deps() {
     echo "⚠️ 请自行确保以下命令存在："
     echo "   curl wget openssl shuf base64 sed awk"
 }
+export uuid=${uuid:-''}; export port_vm_ws=${vmpt:-''}; export port_tr=${trpt:-''}; export port_hy2=${hypt:-''}; export port_vlr=${vlrt:-''}; export cdnym=${cdnym:-''}; export argo=${argo:-''}; export ARGO_DOMAIN=${agn:-''}; export ARGO_AUTH=${agk:-''}; export ippz=${ippz:-''}; export name=${name:-''}; export oap=${oap:-''}
+
+install_deps
+
+v46url="https://icanhazip.com"
+agsburl="https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh"
+
+# ================== 颜色函数 ==================
+white(){ echo -e "\033[1;37m$1\033[0m"; }
+red(){ echo -e "\e[1;91m$1\033[0m"; }
+green(){ echo -e "\e[1;32m$1\033[0m"; }
+yellow(){ echo -e "\e[1;33m$1\033[0m"; }
+blue(){ echo -e "\e[1;34m$1\033[0m"; }
+purple(){ echo -e "\e[1;35m$1\033[0m"; }
+
+gradient() {
+    local text="$1"
+    local colors=(196 202 208 214 220 190 82 46 51 39 33)
+    local i=0
+    for ((n=0;n<${#text};n++)); do
+        printf "\033[38;5;${colors[i]}m%s\033[0m" "${text:n:1}"
+        i=$(( (i+1)%${#colors[@]} ))
+    done
+    echo
+}
+# ================== 颜色函数 ==================
+VERSION="1.0.1(2026-01-03)"
+AUTHOR="littleDoraemon"
+
+showmode(){
+    blue "===================================================="
+    gradient "       agsb 一键脚本（vmess/trojan Argo选1,vless+hy2直连）"
+    green    "       作者：$AUTHOR"
+    yellow   "       版本：$VERSION"
+    blue "===================================================="
+ 
+    yellow "主脚本：bash <(curl -Ls ${agsburl}) 或 bash <(wget -qO- ${agsburl})"
+    yellow "显示节点信息命令：agsb list"
+    yellow "重置变量组命令： agsb rep"
+    yellow "更新Singbox内核命令：agsb ups"
+    yellow "重启脚本命令：agsb res"
+    yellow "卸载脚本命令：agsb del"
+    echo "---------------------------------------------------------"
+}
+
 
 b64_noline() {
     if base64 --help 2>&1 | grep -q '\-w'; then
