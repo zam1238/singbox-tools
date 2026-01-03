@@ -95,3 +95,8 @@ agn_tr="tr.example.com" \
 agk_tr="TR_ARGO_TOKEN" \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/agsb.sh)
 ```
+
+
+# 感谢开发者（改写自他的脚本，他的是argo 2选1）
+
+http://github.com//77160860/proxy
