@@ -730,7 +730,7 @@ cip(){
             yellow "【Hysteria2】"
             content="hysteria2://$uuid@$server_v4:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain"
             green "$content"
-            generate_qr "$content"
+           # generate_qr "$content"
             echo
         fi
 
@@ -742,7 +742,7 @@ cip(){
             yellow "【VLESS Reality】"
             content="vless://$uuid@$server_v4:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id"
             green "$content"
-            generate_qr "$content"
+           # generate_qr "$content"
             echo
         fi
     fi
@@ -757,7 +757,7 @@ cip(){
             yellow "【Hysteria2】"
             content="hysteria2://$uuid@$server_v6:$port_hy2?security=tls&alpn=h3&insecure=1&sni=$cdn_domain"
             green "$content"
-            generate_qr "$content"
+           # generate_qr "$content"
             echo
         fi
 
@@ -769,7 +769,7 @@ cip(){
             yellow "【VLESS Reality】"
             content="vless://$uuid@$server_v6:$port_vlr?encryption=none&security=reality&sni=$cdn_domain&fp=chrome&flow=xtls-rprx-vision&publicKey=$public_key&shortId=$short_id"
             green "$content"
-            generate_qr "$content"
+          #  generate_qr "$content"
             echo
         fi
     fi
@@ -785,7 +785,7 @@ cip(){
         yellow "【VMess Argo】"
         content="vmess://$vmess_b64"
         green "$content"
-        generate_qr "$content"
+       # generate_qr "$content"
         echo
     fi
 
@@ -793,7 +793,7 @@ cip(){
         yellow "【Trojan Argo】"
         content="trojan://$uuid@$cdn_domain:443?security=tls&type=ws&host=$ARG_AG_TR_DOMAIN&path=/$uuid-tr&sni=$ARG_AG_TR_DOMAIN&fp=chrome"
         green "$content"
-        generate_qr "$content"
+      #  generate_qr "$content"
         echo
     fi
 
