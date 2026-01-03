@@ -759,9 +759,36 @@ cip(){
 
 # ================== 清理 / 卸载 ==================
 
+# ================== 清理 Argo 服务（systemd / openrc） ==================
+cleanup_argo(){
+    for name in argo-vm argo-tr; do
+
+        # ----- systemd -----
+        if command -v systemctl >/dev/null 2>&1 && pidof systemd >/dev/null 2>&1; then
+            systemctl stop "$name" >/dev/null 2>&1 || true
+            systemctl disable "$name" >/dev/null 2>&1 || true
+            rm -f "/etc/systemd/system/$name.service"
+        fi
+
+        # ----- openrc -----
+        if command -v rc-service >/dev/null 2>&1; then
+            rc-service "$name" stop >/dev/null 2>&1 || true
+            rc-update del "$name" default >/dev/null 2>&1 || true
+            rm -f "/etc/init.d/$name"
+        fi
+
+        # ----- runtime files -----
+        rm -f "/run/$name.pid"
+        rm -f "$HOME/agsb/${name}.pid"
+        rm -f "$HOME/agsb/${name}.log"
+        rm -f "$HOME/agsb/${name}.env"
+    done
+}
+
 
 cleandel(){
     echo "正在卸载 agsb"
+    cleanup_argo
 
     # systemd
     if pidof systemd >/dev/null 2>&1; then
