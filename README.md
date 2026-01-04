@@ -1,3 +1,5 @@
+# singbox 一键安装脚本
+
 # 环境变量说明
 
 ## ① uuid=XXXX-xxx-XXXX（可传，可不传）
@@ -24,9 +26,9 @@
 - ❌ 不传 → 临时 Argo（trycloudflare）
 - ✅ 只有你自己有 CF Tunnel才传
 
-## ④ cf_host（cdn域名 和 cf_port） 注意：这2个值不会填的话就不要传
+## ④ cf_host、hy_sni、vl_sni（cdn域名 和 各协议的伪装域名，可选） **注意：这几个值不会填的话就不要传
 
-## 用在以上地方:
+### 用在以下地方:
 ——VMess Argo：
 "add":"${cf_host}"
 
@@ -131,7 +133,49 @@ name="小叮当-韩国春川"  \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh) rep
 ```
 
-## 以此类推
+
+## 5 测试用例
+```bash
+uuid=0631a7f3-09f8-4144-acf2-a4f5bd9ed281 \
+ippz=4 \
+trpt=31003 \
+hypt=31001 \
+vlrt=31002 \
+argo=trpt \
+agn="test-tr.xxxx.nyc.mn" \
+agk="eyJhIjoiYTg2NTc2M2YxOGEwOTZhOWI3MWRiZmMxYzJkYzRlYTYiLCJ0IjoiZDgyYzk3MmItZGNlNy00ODJkLWI2NjgtYmJlNDgyZDMxNTNhIiwicyI6IlkyRmhNbVkxTURVdFlUZ3lPQzAwTVRBMExUbGhNakV0TUdNd1pXVmlO4000WWpobCJ9" \
+name="小叮当-韩国春川"  \
+cdn_host="www.visa.com" \
+hy_sni="time.js" \
+vl_sni="www.yahoo.com" \
+bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh) rep
+```
+
+## 解释一下上面那一大堆参数：
+ 0、 bash后面跟了一个参数 rep，代表覆盖式安装，你可以用这个改成其他功能，比如del 代表 卸载, list 代表 查看节点，具体有哪些值你可以跑一次安装脚本你就知道怎么用了。
+ 1、uuid 不传的时候会自动生成
+ 2、 ippz ip显示策略，不影响服务
+ 3、 端口
+   ```bash
+   trpt=31003 \
+   hypt=31001 \
+   vlrt=31002 \
+   ```
+     这三个分别为trojan、hy2、vless的端口
+
+4、argo 代表使用的是哪一个协议作为argo，只能是一下三种值
+
+    - 当argo=vmpt 表示启用vmess的argo转发
+    - 当argo=trpt 表示启用trojan的argo转发
+    - 或者这个argo参数留空，表示不启用argo
+5、agn 和 agk 分别为隧道域名和隧道 token
+6、 name 节点名称前缀
+7、cdn_host 指的是用argo时的cf域名，缺省值为cdn.7zz.cn，你可以自己传你要的值，比如 www.visa.com。不传就会使用缺省值做兜底。
+8、hy_sni 指的是用hy2协议的sni（伪装域名），缺省值为www.bing.com，你可以自己传你要的值，比如 time.js。不传就会使用缺省值做兜底。
+9、vl_sni 指的是用vless协议的sni(伪装域名)，缺省值为www.ua.edu，你可以自己传你要的值，比如 www.yahoo.com。不传就会使用缺省值做兜底。
+
+
+## 以此类推，最后给一下协议组合吧
 
 | 你设置了什么             | 实际生成的节点        |
 | ------------------ | -------------- |
