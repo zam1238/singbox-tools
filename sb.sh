@@ -177,7 +177,7 @@ v4v6(){
     v6=$( (curl -s6m5 -k "$v46url" 2>/dev/null) || (wget -6 -qO- --tries=2 "$v46url" 2>/dev/null) )
 }
 set_sbyx(){
-    if [ -n "$name" ]; then sxname=$name-; echo "$sxname" > "$HOME/agsb/name"; echo; echo "所有节点名称前缀：$name"; fi
+    if [ -n "$name" ]; then sxname=$name-; echo "$sxname" > "$HOME/agsb/name"; echo; yellow "所有节点名称前缀：$name"; fi
     v4v6
     if (curl -s4m5 -k "$v46url" >/dev/null 2>&1) || (wget -4 -qO- --tries=2 "$v46url" >/dev/null 2>&1); then v4_ok=true; fi
     if (curl -s6m5 -k "$v46url" >/dev/null 2>&1) || (wget -6 -qO- --tries=2 "$v46url" >/dev/null 2>&1); then v6_ok=true; fi
@@ -210,7 +210,7 @@ insuuid(){
         echo "$uuid" > "$HOME/agsb/uuid"
     fi
     uuid=$(cat "$HOME/agsb/uuid")
-    echo "UUID密码：$uuid"
+    yellow "UUID密码：$uuid"
 }
 installsb(){
     echo; echo "=========启用Sing-box内核========="
@@ -279,9 +279,11 @@ EOF
 
         if [ -f "$HOME/agsb/short_id" ]; then
             short_id=$(cat "$HOME/agsb/short_id")
+            yellow "从文件中读取short_id,值: $short_id"
         else
             short_id=$(openssl rand -hex 4)
             echo "$short_id" > "$HOME/agsb/short_id"
+            green "随机生成short_id,值: $short_id"
         fi
 
 
@@ -372,9 +374,9 @@ EOF
             argoname='临时'
             nohup "$HOME/agsb/cloudflared" tunnel --url http://localhost:$(cat $HOME/agsb/argoport.log) --edge-ip-version auto --no-autoupdate > $HOME/agsb/argo.log 2>&1 &
         fi
-        echo "申请Argo$argoname隧道中……请稍等"; sleep 8
+        yellow "申请Argo$argoname隧道中……请稍等"; sleep 8
         if [ -n "${ARGO_DOMAIN}" ] && [ -n "${ARGO_AUTH}" ]; then argodomain=$(cat "$HOME/agsb/sbargoym.log" 2>/dev/null); else argodomain=$(grep -a trycloudflare.com "$HOME/agsb/argo.log" 2>/dev/null | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}'); fi
-        if [ -n "${argodomain}" ]; then echo "Argo$argoname隧道申请成功"; else echo "Argo$argoname隧道申请失败"; fi
+        if [ -n "${argodomain}" ]; then green "Argo$argoname隧道申请成功"; else purple "Argo$argoname隧道申请失败"; fi
     fi
     sleep 5; echo
     if find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null | grep -Eq 'agsb/(sing-box|c)' || pgrep -f 'agsb/(sing-box|c)' >/dev/null 2>&1 ; then
@@ -386,14 +388,15 @@ EOF
         sed -i '/agsb\/cloudflared/d' /tmp/crontab.tmp
         if [ -n "$argo" ] && [ -n "$vmag" ]; then if [ -n "${ARGO_DOMAIN}" ] && [ -n "${ARGO_AUTH}" ]; then if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then echo '@reboot sleep 10 && nohup $HOME/agsb/cloudflared tunnel --no-autoupdate --edge-ip-version auto run --token $(cat $HOME/agsb/sbargotoken.log) >/dev/null 2>&1 &' >> /tmp/crontab.tmp; fi; else echo '@reboot sleep 10 && nohup $HOME/agsb/cloudflared tunnel --url http://localhost:$(cat $HOME/agsb/argoport.log) --edge-ip-version auto --no-autoupdate > $HOME/agsb/argo.log 2>&1 &' >> /tmp/crontab.tmp; fi; fi
         crontab /tmp/crontab.tmp >/dev/null 2>&1; rm /tmp/crontab.tmp
-        echo "agsb脚本进程启动成功，安装完毕" && sleep 2
+        green "agsb脚本进程启动成功，安装完毕" && sleep 2
     else
         echo "agsb脚本进程未启动，安装失败" && exit
     fi
 }
 agsbstatus(){
-    echo "=========当前内核运行状态========="
+    purple "=========当前内核运行状态========="
     procs=$(find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null)
+    
     if echo "$procs" | grep -Eq 'agsb/sing-box' || pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then echo "Sing-box (版本V$("$HOME/agsb/sing-box" version 2>/dev/null | awk '/version/{print $NF}'))：运行中"; else echo "Sing-box：未启用"; fi
     if echo "$procs" | grep -Eq 'agsb/c' || pgrep -f 'agsb/c' >/dev/null 2>&1; then echo "cloudflared Argo (版本V$("$HOME/agsb/cloudflared" version 2>/dev/null | awk '{print $3}'))：运行中"; else echo "Argo：未启用"; fi
 }
@@ -414,6 +417,8 @@ cip(){
         port_vlr=$(cat "$HOME/agsb/port_vlr")
         public_key=$(sed -n '2p' "$HOME/agsb/reality.key" | awk '{print $2}')
         short_id=$(cat "$HOME/agsb/short_id")
+        green "cip函数中的short_id,值为:$short_id"
+        
         vless_link="vless://${uuid}@${server_ip}:${port_vlr}?encryption=none&security=reality&sni=www.ua.edu&fp=chrome&flow=xtls-rprx-vision&publicKey=${public_key}&shortId=${short_id}#${sxname}vless-reality-$hostname"
         yellow "💣【 VLESS-Reality-Vision 】(直连协议)"; green "$vless_link" | tee -a "$HOME/agsb/jh.txt"; echo;
     fi
