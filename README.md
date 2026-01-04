@@ -153,8 +153,11 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 
 ## 解释一下上面那一大堆参数：
  0、 bash后面跟了一个参数 rep，代表覆盖式安装，你可以用这个改成其他功能，比如del 代表 卸载, list 代表 查看节点，具体有哪些值你可以跑一次安装脚本你就知道怎么用了。
+
  1、uuid 不传的时候会自动生成
+
  2、 ippz ip显示策略，不影响服务
+
  3、 端口
    ```bash
    trpt=31003 \
@@ -169,9 +172,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
     - 当argo=trpt 表示启用trojan的argo转发
     - 或者这个argo参数留空，表示不启用argo
 5、agn 和 agk 分别为隧道域名和隧道 token
+
 6、 name 节点名称前缀
+
 7、cdn_host 指的是用argo时的cf域名，缺省值为cdn.7zz.cn，你可以自己传你要的值，比如 www.visa.com。不传就会使用缺省值做兜底。
+
 8、hy_sni 指的是用hy2协议的sni（伪装域名），缺省值为www.bing.com，你可以自己传你要的值，比如 time.js。不传就会使用缺省值做兜底。
+
 9、vl_sni 指的是用vless协议的sni(伪装域名)，缺省值为www.ua.edu，你可以自己传你要的值，比如 www.yahoo.com。不传就会使用缺省值做兜底。
 
 
