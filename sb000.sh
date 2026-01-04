@@ -155,7 +155,7 @@ gradient() {
     echo
 }
 # ================== 颜色函数 ==================
-VERSION="1.0.2(2026-01-03)"
+VERSION="1.0.3(2026-01-03)"
 AUTHOR="littleDoraemon"
 
 showmode(){
