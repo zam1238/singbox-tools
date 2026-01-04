@@ -45,14 +45,14 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 - ❌ 不传 → 临时 Argo（trycloudflare）
 - ✅ 只有你自己有 CF Tunnel才传
 
-## ④ cf_host、hy_sni、vl_sni（cdn域名 和 各协议的伪装域名，可选） **注意：这几个值不会填的话就不要传
+## ④ cf_host、hy_sni、vl_sni（cdn域名 和 各协议的伪装域名，可选） **注意：这几个值不会填的话就不要传，因为他们都有默认值
 
 ### 用在以下地方:
 ——VMess Argo：
 "add":"${cf_host}"
 
 —— Trojan Argo：
-trojan://${uuid}@${cf_host}:cf_port?...
+trojan://${uuid}@${cf_host}:443?...
 
 
 
