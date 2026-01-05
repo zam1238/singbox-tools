@@ -236,13 +236,13 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 
 6、 name 节点名称前缀（后缀会用各协议简写区分）
 
-7、cdn_host 指的是用argo时的cf域名，缺省值为cdn.7zz.cn，你可以自己传你要的值，比如 www.visa.com。不传就会使用缺省值做兜底。
+7、cdn_host 指的是用argo时的cf域名，缺省值为cdn.7zz.cn，你可以自己传你要的值，比如 www.visa.com 。 不传就会使用缺省值做兜底。
 
-8、hy_sni 指的是用hy2协议的sni（伪装域名），缺省值为www.bing.com，你可以自己传你要的值，比如 time.js。不传就会使用缺省值做兜底。
+8、hy_sni 指的是用hy2协议的sni（伪装域名），缺省值为www.bing.com，你可以自己传你要的值，比如 time.js 。 不传就会使用缺省值做兜底。
 
-9、vl_sni 指的是用vless协议的sni(伪装域名)，缺省值为www.ua.edu，你可以自己传你要的值，比如 www.yahoo.com。不传就会使用缺省值做兜底。
+9、vl_sni 指的是用vless协议的sni(伪装域名)，缺省值为www.ua.edu，你可以自己传你要的值，比如 www.yahoo.com 。 不传就会使用缺省值做兜底。
 
-10、vl_sni 指的是用vless协议的sni(伪装域名)，缺省值为www.ua.edu，你可以自己传你要的值，比如 www.yahoo.com。不传就会使用缺省值做兜底。
+10、vl_sni 指的是用vless协议的sni(伪装域名)，缺省值为www.ua.edu，你可以自己传你要的值，比如 www.yahoo.com 。 不传就会使用缺省值做兜底。
 
 11、argo的默认端口443（这个暂时不让修改，所以你换 cdn_host参数的值的时候注意一下是443端口才能支持）
 
@@ -267,7 +267,6 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 | hypt + vlrt + tupt           | 3（hy2、vless、tuic直连）                             |
 | hypt + vlrt + argo           | **3（hy2、vless直连+Argo-vmess或者Argo-trojan）**         |
 | hypt + vlrt + tupt + argo    | **4（hy2、vless、tuic直连+Argo-vmess或者Argo-trojan）**   |
-
 
 ## 感谢
 
