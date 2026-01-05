@@ -20,7 +20,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 
 # 环境变量说明
 
-## ① uuid=XXXX-xxx-XXXX（可传，可不传）
+## ① uuid=XXXX-xxx-XXXX（可传，也可不传）
 
 **含义**
 - 不传uuid → 脚本自动生成 UUID
@@ -41,27 +41,27 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 - agn="argo固定隧道域名"
 - agk="argo隧道token"
 
-    -当agk为普通字符串的场景：agk的值用英文双引号包裹""
+    - 当agk为普通字符串的场景：agk的值用英文双引号包裹""
 
-    -当agk的值为json格式的时候，agk值用英文单引号包裹''
+    - 当agk的值为json格式的时候，agk值只能用英文单引号包裹''
 
 **是否必须？**
 - ❌ 不传 → 临时 Argo（trycloudflare）
 - ✅ 只有你自己有 CF Tunnel才传
 
-## ④ cf_host、hy_sni、vl_sni（cdn域名 和 各协议的伪装域名，可选） **注意：这几个值不会填的话就不要传
+## ④ cf_host、hy_sni、vl_sni（cdn域名 和 各协议的伪装域名，可选） **注意：这几个值不会填的话就不要瞎传
 
 ### 用在以下地方(argo场景的端口我固定写死了443端口):
-——VMess Argo：
+—— VMess Argo：
 "add":"${cf_host}"
 
-—— Trojan Argo：
+——  Trojan Argo：
 trojan://${uuid}@${cf_host}:443?...
 
 
 
 
-## ⑤ ippz（IP 优选策略，可选）
+## ⑤ ippz（IP显示策略，可选）
 
 | 值 | 含义 |
 |----|-----|
@@ -82,7 +82,7 @@ trojan://${uuid}@${cf_host}:443?...
 
 # 常见组合调用方式
 
-## 组合1️⃣ 仅 1 直连协议（不走 Argo,hypt与vlrt、tupt这几个参数选一个来写）
+## 组合1️⃣、 仅 1个直连协议（不走 Argo,hypt与vlrt、tupt这几个端口参数选一个来写）
 
 ### 只要hy2协议
 
@@ -105,7 +105,7 @@ tupt=2082 \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh)
 ```
 
-## 组合2️⃣ 仅 2 直连协议（不走 Argo,hypt与vlrt参数都写代表hy2和vless-reality 协议都会出来）
+## 组合2️⃣、 仅 2个直连协议（不走 Argo,hypt与vlrt参数都写，代表hy2和vless-reality 协议都会出来）
 
 ```bash
 hypt=2082 \
@@ -113,7 +113,7 @@ vlrt=2083 \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh)
 ```
 
-## 组合3️⃣ VMess  Argo/ Trojan  Argo（最常用，2个协议选一个）
+## 组合3️⃣、 VMess  Argo/ Trojan  Argo（最常用，2个协议选一个）
 
 ```bash
 ippz=4 \
@@ -125,7 +125,7 @@ name="小叮当-韩国春川"  \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh)
 ```
 
-### 当使用trojan的argo时
+### 当使用trojan Argo时
 
 ```bash
 ippz=4 \
@@ -137,7 +137,7 @@ name="小叮当-韩国春川"  \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh) 
 ```
 
-## 当使用trojan的argo时
+## 当使用trojan Argo时
 
 ```bash
 ippz=4 \
@@ -149,7 +149,7 @@ name="小叮当-韩国春川"  \
 bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh) 
 ```
 
-## 4️⃣ VMess + Hysteria2+ vless
+## 4️⃣ 、VMess + Hysteria2+ vless
 
 ```bash
 ippz=4 \
@@ -164,9 +164,9 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 ```
 
 
-## 5 测试用例（4协议，hy2+vless+tuic+Argo trojan）
+## 5️⃣、我自己的测试用例（4协议，hy2+vless+tuic+trojan Argo）
 
-### argo tunel的token为普通字符串的场景：
+### argo tunnel的token为普通字符串的场景：
 ```bash
 uuid=0631a7f3-09f8-4144-acf2-a4f5bd9ed281 \
 ippz=4 \
@@ -187,7 +187,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 
 
 
-### argo tunel的json token的场景：（请一定要记得json格式的时候，要用英文单引号包裹起来）
+### argo tunnel的json token的场景：（请一定要记得json格式的时候，要用英文单引号包裹起来）
 
 ```bash
 uuid=0631a7f3-09f8-4144-acf2-a4f5bd9ed281 \
@@ -207,20 +207,22 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 
 
 ## 解释一下上面那一大堆参数：
- 0、 如果bash后面跟了一个参数 rep（如果没跟这个参数默认为安装），代表覆盖式安装，你可以用这个改成其他功能，比如del 代表 卸载, list 代表 查看节点，具体有哪些值你可以跑一次安装脚本你就知道怎么用了。
+
+ 0、 如果bash后面跟了一个参数 rep（如果没写这个参数默认视为安装），代表覆盖式安装，你可以用这个改成其他功能，比如del 代表 卸载, list 代表 查看节点，具体有哪些值你可以跑一次安装脚本你就知道怎么用了。
 
  1、uuid 不传的时候会自动生成
 
  2、 ippz ip显示策略，不影响服务
 
- 3、 端口
+ 3、 各种端口
    ```bash
    trpt=41003 \
    hypt=41001 \
    vlrt=41002 \
    tupt=41005 \
+   vmpt=41004 \
    ```
-     这4个分别为trojan、hy2、vless、tuic的端口
+     这4个分别为trojan、hy2、vless、tuic、vmess的端口
 
 4、argo 代表使用的是哪一个协议作为argo，只能是一下三种值
 
@@ -269,7 +271,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/he
 | hypt + vlrt + tupt + argo    | **4（hy2、vless、tuic直连+Argo-vmess或者Argo-trojan）**   |
 
 ## 感谢
-
 感谢以下开发者的贡献：
 
 - [77160860大佬](https://github.com/77160860/proxy)
+
