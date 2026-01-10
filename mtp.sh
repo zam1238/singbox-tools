@@ -6,10 +6,16 @@ export PORT="${PORT:-443}"
 export PORT_V6="${PORT_V6:-443}"
 export SECRET="${SECRET:-}"
 export IP_MODE="${IP_MODE:-v4}"
-
+export INTERACTIVE_FLAG
 export INSTALL_MODE="${INSTALL_MODE:-'go'}"
 
-export INTERACTIVE_FLAG
+if [[ "$INSTALL_MODE" != "go" && "$INSTALL_MODE" != "py" ]]; then
+    echo -e "${RED}无效的安装模式: $INSTALL_MODE。默认使用 'go' 模式.${PLAIN}"
+    INSTALL_MODE="go"
+fi
+
+
+
 
 
 # 全局配置
