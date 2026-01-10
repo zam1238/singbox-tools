@@ -34,8 +34,8 @@ PORT=31009 DOMAIN='你的伪装域名' IP_MODE='v4/v6/dual' INSTALL_MODE='go/py'
 #### 4️⃣、 INSTALL_MODE='?'  (安装方式,go版或者python版)
 
 **值含义**
-- go → 使用go版安装(不填默认使用go版安装)
-- py → 使用python版安装
+- go → 使用go版安装
+- py → 使用python版安装(不填默认使用python版安装)
 
 
 #### 5️⃣、 SECRET='?'  (安装密钥,不会就留空，留空就随机产生密钥,因为go版的时候，密钥里面会包含域名信息，所以，不会请不要乱填)

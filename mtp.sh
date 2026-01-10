@@ -14,13 +14,13 @@ export PORT_V6="${PORT_V6:-443}"
 export SECRET="${SECRET:-}"
 export IP_MODE="${IP_MODE:-v4}"
 export INTERACTIVE_FLAG
-export INSTALL_MODE="${INSTALL_MODE:-'go'}"
+export INSTALL_MODE="${INSTALL_MODE:-'py'}"
 
 
 install_mode_init(){
     if [[ "$INSTALL_MODE" != "go" && "$INSTALL_MODE" != "py" ]]; then
         echo -e "${YELLOW}无效的安装模式: $INSTALL_MODE。默认使用 'go' 模式.${PLAIN}"
-        INSTALL_MODE="go"
+        INSTALL_MODE="py"
     fi
 }
 
@@ -152,7 +152,7 @@ check_and_handle_port_usage() {
                 echo -e "${GREEN}端口 $port 已被 mtg 服务占用，无需停止服务。${PLAIN}"
             else
                 # If not mtg-go, ask the user to overwrite or cancel
-                echo -e "${YELLOW}是否强制覆盖该进程并继续使用此端口？[y/N]: ${PLAIN}"
+                echo -e "${YELLOW}是否强制覆盖该进程并继续使用此端口？[y/N](默认 N，直接回车视为N): ${PLAIN}"
                 read -r answer
                 if [[ -z "$answer" || "$answer" == "n" || "$answer" == "N" ]]; then
                     echo -e "${RED}端口占用，安装被取消。${PLAIN}"
