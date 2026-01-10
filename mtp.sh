@@ -232,11 +232,13 @@ install_mtp_python() {
             [ -z "$PORT" ] && PORT=443
             PORT_V6=""
         fi
-        
-        SECRET="${SECRET:-$(generate_secret)}"
-        echo -e "${GREEN}生成的密钥: $SECRET${PLAIN}"
+
     fi
 
+        
+    SECRET="${SECRET:-$(generate_secret)}"
+    echo -e "${GREEN}生成的密钥: $SECRET${PLAIN}"
+    
     # Generate config.py file with the selected values
     mkdir -p "$CONFIG_DIR"
     IPV4_CFG="\"0.0.0.0\""
@@ -341,6 +343,7 @@ install_mtp_go() {
             echo -e "${RED}无效的 IP 模式: $IP_MODE${PLAIN}"
             exit 1
         fi
+
     else
         # Interactive installation: prompt user for inputs
         read -p "请输入伪装域名 (默认 $DOMAIN): " DOMAIN
@@ -359,9 +362,12 @@ install_mtp_go() {
             PORT_V6=""
         fi
         
-        SECRET="${SECRET:-$(generate_secret)}"
-        echo -e "${GREEN}生成的密钥: $SECRET${PLAIN}"
+
     fi
+
+    SECRET="${SECRET:-$(generate_secret)}"
+    echo -e "${GREEN}生成的密钥: $SECRET${PLAIN}"
+
 
     # Generate config.py file with the selected values
     mkdir -p "$CONFIG_DIR"
