@@ -174,7 +174,7 @@ install_mtp_python() {
         cp "${FOUND_PATH}" "$BIN_DIR/mtp-python"
     else
         echo -e "${BLUE}未找到本地文件，尝试从 GitHub 下载 (${TARGET_BIN})...${PLAIN}"
-        DOWNLOAD_URL="https://github.com/jyucoeng/singbox-tools/releases/download/mtproxy/mtg-go.mtp-python/${TARGET_BIN}"
+        DOWNLOAD_URL="https://github.com/jyucoeng/singbox-tools/releases/download/mtproxy/${TARGET_BIN}"
         wget -O "$BIN_DIR/mtp-python" "$DOWNLOAD_URL"
         if [ $? -ne 0 ]; then
             echo -e "${RED}下载失败！${PLAIN}"
