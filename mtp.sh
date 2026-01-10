@@ -4,10 +4,10 @@
 export DOMAIN="${DOMAIN:-www.apple.com}"
 export PORT="${PORT:-443}"
 export PORT_V6="${PORT_V6:-443}"
-export SECRET="${SECRET:-$(generate_secret)}"
+export SECRET="${SECRET:-}"
 export IP_MODE="${IP_MODE:-v4}"
 
-export INSTALL_MODE="${INSTALL_MODE:-'py'}"
+export INSTALL_MODE="${INSTALL_MODE:-'go'}"
 
 export INTERACTIVE_FLAG
 
