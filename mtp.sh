@@ -44,6 +44,9 @@ OS=""
 PACKAGE_MANAGER=""
 INIT_SYSTEM=""
 
+
+
+
 is_port_occupied(){  
     
     local port="$1"
@@ -304,7 +307,7 @@ install_mtp_go() {
         cp "${FOUND_PATH}" "$BIN_DIR/mtg-go"
     else
         echo -e "${BLUE}未找到本地文件，尝试从 GitHub 下载 (${TARGET_NAME})...${PLAIN}"
-        DOWNLOAD_URL="https://github.com/jyucoeng/singbox-tools/releases/download/mtproxy/mtg-go.mtp-python/${TARGET_NAME}"
+        DOWNLOAD_URL="https://github.com/jyucoeng/singbox-tools/releases/download/mtproxy/${TARGET_NAME}"
         wget -O "$BIN_DIR/mtg-go" "$DOWNLOAD_URL"
         if [ $? -ne 0 ]; then
             echo -e "${RED}下载失败！${PLAIN}"
