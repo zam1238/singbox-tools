@@ -140,36 +140,39 @@ check_and_handle_port_usage() {
     if sudo ss -tuln | grep ":$port "; then
         echo -e "${YELLOW}端口 $port 已经被占用！${PLAIN}"
 
-        # Check if the port is being used by mtg service
-        pid=$(sudo ss -tuln | grep ":$port " | awk '{print $6}' | cut -d',' -f2)
-        service_pid=$(ps -p $pid -o comm=)
-
-        if [[ "$service_pid" == "mtg-go" ]]; then
-            echo -e "${GREEN}端口 $port 已被 mtg 服务占用，无需停止服务。${PLAIN}"
-            # Continue to the next step without stopping the process
-        else
-            # If not mtg-go, ask if the user wants to stop the conflicting process
-            echo -e "${YELLOW}是否强制覆盖该进程并继续使用此端口？[y/N]: ${PLAIN}"
-            read -r answer
-            # Default to "N" if no input is provided
-            if [[ -z "$answer" || "$answer" == "n" || "$answer" == "N" ]]; then
-                echo -e "${RED}端口占用，安装被取消。${PLAIN}"
-                exit 1
-            elif [[ "$answer" == "y" || "$answer" == "Y" ]]; then
-                # Stop the conflicting service/process
-                echo -e "${YELLOW}找到占用端口 $port 的进程，正在停止它...${PLAIN}"
-                sudo kill -9 "$pid"
-                echo -e "${GREEN}进程已停止，继续安装。${PLAIN}"
+        # Check if the port is being used by mtg service using lsof
+        pid=$(sudo lsof -t -i:$port)
+        
+        # If a process is using the port
+        if [ -n "$pid" ]; then
+            service_pid=$(ps -p $pid -o comm=)
+            
+            # Check if it's the same mtg-go service
+            if [[ "$service_pid" == "mtg-go" ]]; then
+                echo -e "${GREEN}端口 $port 已被 mtg 服务占用，无需停止服务。${PLAIN}"
             else
-                echo -e "${RED}无效输入，安装被取消。${PLAIN}"
-                exit 1
+                # If not mtg-go, ask the user to overwrite or cancel
+                echo -e "${YELLOW}是否强制覆盖该进程并继续使用此端口？[y/N]: ${PLAIN}"
+                read -r answer
+                if [[ -z "$answer" || "$answer" == "n" || "$answer" == "N" ]]; then
+                    echo -e "${RED}端口占用，安装被取消。${PLAIN}"
+                    exit 1
+                elif [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+                    # Stop the conflicting service/process
+                    echo -e "${YELLOW}找到占用端口 $port 的进程，正在停止它...${PLAIN}"
+                    sudo kill -9 "$pid"
+                    sleep 3
+                    echo -e "${GREEN}进程已停止，继续安装。${PLAIN}"
+                else
+                    echo -e "${RED}无效输入，安装被取消。${PLAIN}"
+                    exit 1
+                fi
             fi
         fi
     else
         echo -e "${GREEN}端口 $port 可用，继续安装。${PLAIN}"
     fi
 }
-
 
 # --- IP 模式选择 ---
 select_ip_mode() {
@@ -405,7 +408,7 @@ install_mtp_go() {
 
 
     check_and_handle_port_usage "$PORT"
-    
+
     
 
     SECRET="${SECRET:-$(generate_secret)}"
