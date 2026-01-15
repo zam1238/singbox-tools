@@ -323,16 +323,34 @@ check_port_or_prompt_interactive() {
     return 1
 }
 
+download_file() {
+    local url=$1
+    local target_file=$2
+    local retries=3
+    local count=0
 
+    while (( count < retries )); do
+        echo -e "${BLUE}尝试下载文件: $url...${PLAIN}"
+        wget -O "$target_file" "$url"
 
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}下载成功！${PLAIN}"
+            return 0
+        fi
 
+        ((count++))
+        echo -e "${RED}下载失败，重试 ${count}/${retries}...${PLAIN}"
+        sleep 2  # Wait before retrying
+    done
 
+    echo -e "${RED}下载失败，已尝试 $retries 次。请检查网络或文件路径。${PLAIN}"
+    return 1
+}
 
 # --- Python 版安装逻辑 ---
 install_mtp_python() {
     echo -e "${BLUE}正在准备安装 Python 版...${PLAIN}"
     
-
     ARCH=$(uname -m)
     case $ARCH in
         x86_64) P_ARCH="amd64" ;;
@@ -354,27 +372,18 @@ install_mtp_python() {
         FOUND_PATH="${SCRIPT_DIR}/${TARGET_BIN}"
     fi
 
-
     control_service stop mtp-python
-
 
     if [ -n "$FOUND_PATH" ]; then
         echo -e "${GREEN}检测到本地二进制文件: ${FOUND_PATH}${PLAIN}"
         cp "${FOUND_PATH}" "$BIN_DIR/mtp-python"
     else
-        echo -e "${BLUE}未找到本地文件，尝试从 GitHub 下载 (${TARGET_BIN})...${PLAIN}"
         DOWNLOAD_URL="https://github.com/jyucoeng/singbox-tools/releases/download/mtproxy/${TARGET_BIN}"
-        wget -O "$BIN_DIR/mtp-python" "$DOWNLOAD_URL"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}下载失败！${PLAIN}"
-            echo -e "${YELLOW}请确保 GitHub Release 中存在文件: ${TARGET_BIN}${PLAIN}"
-            exit 1
-        fi
-        echo -e "${GREEN}下载并安装成功。${PLAIN}"
+        download_file "$DOWNLOAD_URL" "$BIN_DIR/mtp-python" || exit 1
     fi
+
     chmod +x "$BIN_DIR/mtp-python"
     
-
     # Generate config.py file with the selected values
     mkdir -p "$CONFIG_DIR"
     IPV4_CFG="\"0.0.0.0\""
@@ -418,11 +427,9 @@ EOF
     show_info_python "$PORT" "$SECRET" "$DOMAIN" "$IP_MODE" "$PORT_V6"
 }
 
-
 # --- Go 版安装逻辑 ---
 install_mtp_go() {
     # Use environment variables for domain, port, and other settings
-
     ARCH=$(uname -m)
     case $ARCH in
         x86_64) MTG_ARCH="amd64" ;;
@@ -439,46 +446,23 @@ install_mtp_go() {
     elif [ -f "${SCRIPT_DIR}/${TARGET_NAME}" ]; then
         FOUND_PATH="${SCRIPT_DIR}/${TARGET_NAME}"
     fi
-    
-   control_service stop mtg
 
+    control_service stop mtg
 
     if [ -n "$FOUND_PATH" ]; then
         echo -e "${GREEN}检测到本地二进制文件: ${FOUND_PATH}${PLAIN}"
         cp "${FOUND_PATH}" "$BIN_DIR/mtg-go"
     else
-        echo -e "${BLUE}未找到本地文件，尝试从 GitHub 下载 (${TARGET_NAME})...${PLAIN}"
         DOWNLOAD_URL="https://github.com/jyucoeng/singbox-tools/releases/download/mtproxy/${TARGET_NAME}"
-        wget -O "$BIN_DIR/mtg-go" "$DOWNLOAD_URL"
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}下载失败！${PLAIN}"
-            exit 1
-        fi
+        download_file "$DOWNLOAD_URL" "$BIN_DIR/mtg-go" || exit 1
     fi
     chmod +x "$BIN_DIR/mtg-go"
-
-
-    # Generate config.py file with the selected values
-    mkdir -p "$CONFIG_DIR"
-    IPV4_CFG="\"0.0.0.0\""
-    IPV6_CFG="None"
-    if [[ "$IP_MODE" == "v6" ]]; then
-        IPV4_CFG="None"
-        IPV6_CFG="\"::\""
-    elif [[ "$IP_MODE" == "dual" ]]; then
-        IPV4_CFG="\"0.0.0.0\""
-        IPV6_CFG="\"::\""
-    fi
-
-
 
     # Proceed with the installation using the variables
     create_service_mtg "$PORT" "$SECRET" "$DOMAIN" "$IP_MODE" "$PORT_V6"
     check_service_status mtg
     show_info_mtg "$PORT" "$SECRET" "$DOMAIN" "$IP_MODE" "$PORT_V6"
 }
-
-
 
 
 
