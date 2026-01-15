@@ -340,8 +340,14 @@ EOF
     openssl req -new -x509 -key "$HOME/agsb/tuic_private.key" -out "$HOME/agsb/tuic_cert.pem" -days 3650 -subj "/CN=${tu_sni}" >/dev/null 2>&1
 
    # Generate a new private key and certificate for anytls
+   # 生成私钥
     openssl ecparam -genkey -name prime256v1 -out "$HOME/agsb/anytls_private.key" >/dev/null 2>&1
-    openssl req -new -x509 -key "$HOME/agsb/anytls_private.key" -out "$HOME/agsb/anytls_cert.pem" -days 3650 -subj "/CN=${any_sni}" >/dev/null 2>&1
+
+    # 生成证书，添加SAN
+    openssl req -new -x509 -key "$HOME/agsb/anytls_private.key" -out "$HOME/agsb/anytls_cert.pem" -days 3650 \
+      -subj "/CN=${any_sni}" \
+      -addext "subjectAltName=DNS:${any_sni}" >/dev/null 2>&1
+
 
 
     # 添加AnyTLS协议 (Since sing-box 1.12.0)
