@@ -924,7 +924,7 @@ show_info_python() {
     if [[ "$IP_MODE" == "v4" || "$IP_MODE" == "dual" ]]; then
         if [ -n "$IPV4" ]; then
             echo -e "${GREEN}IPv4 链接:${PLAIN}"
-            echo -e "tg://proxy?server=$IPV4&port=$1&secret=$FULL_SECRET"
+            echo -e "${GREEN}tg://proxy?server=$IPV4&port=$1&secret=$FULL_SECRET${PLAIN}"
         else
             echo -e "${RED}未检测到 IPv4 地址${PLAIN}"
         fi
@@ -936,8 +936,8 @@ show_info_python() {
         [ -z "$PORT_V6" ] && PORT_V6="$1"
         
         if [ -n "$IPV6" ]; then
-            echo -e "${GREEN}IPv6 链接:${PLAIN}"
-            echo -e "tg://proxy?server=$IPV6&port=$PORT_V6&secret=$FULL_SECRET"
+            echo -e "${PURPLE}IPv6 链接:${PLAIN}"
+            echo -e "${PURPLE}tg://proxy?server=$IPV6&port=$PORT_V6&secret=$FULL_SECRET${PLAIN}"
         else
             echo -e "${YELLOW}未检测到 IPv6 地址${PLAIN}"
         fi
@@ -970,8 +970,8 @@ show_info_mtg() {
     
     if [[ "$IP_MODE" == "v6" || "$IP_MODE" == "dual" ]]; then
         if [ -n "$IPV6" ]; then
-            echo -e "${YELLOW}IPv6 链接:${PLAIN}"
-            echo -e "${YELLOW}tg://proxy?server=$IPV6&port=$1&secret=$FULL_SECRET${PLAIN}"
+            echo -e "${PURPLE}IPv6 链接:${PLAIN}"
+            echo -e "${PURPLE}tg://proxy?server=$IPV6&port=$1&secret=$FULL_SECRET${PLAIN}"
         else
             echo -e "${YELLOW}未检测到 IPv6 地址${PLAIN}"
         fi
