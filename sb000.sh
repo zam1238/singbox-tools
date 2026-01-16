@@ -1,121 +1,189 @@
 #!/usr/bin/env bash
 export LANG=en_US.UTF-8
-[ -z "${trpt+x}" ] || { trp=yes; vmag=yes; }
-[ -z "${hypt+x}" ] || hyp=yes
-[ -z "${vmpt+x}" ] || { vmp=yes; vmag=yes; }
-[ -z "${vlrt+x}" ] || vlr=yes
-[ -z "${tupt+x}" ] || tup=yes  
-[ -z "${anypt+x}" ] || anyp=yes
+#!/usr/bin/env bash
+export LANG=en_US.UTF-8
 
-if find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' | xargs -r readlink 2>/dev/null | grep -q 'agsb/sing-box' || pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
-    if [ "$1" = "rep" ]; then
-        [ "$vlr" = yes ] || [ "$vmp" = yes ] || [ "$trp" = yes ] || [ "$hyp" = yes ] || [ "$tup" = yes ] || [ "$anyp" = yes ]  || { echo "提示：rep重置协议时，请在脚本前至少设置一个协议变量哦，再见！💣"; exit; }
+# 统一判断工具：只有值严格等于 yes 才视为启用
+is_yes() { [ "${1:-}" = "yes" ]; }
+
+# 这些变量是你脚本外部用来“开启协议”的标记：
+# trpt / hypt / vmpt / vlrt / tupt
+# 只要标记存在，就启用对应协议
+if [ -n "${trpt+x}" ]; then
+    trp=yes
+    vmag=yes
+fi
+
+if [ -n "${hypt+x}" ]; then
+    hyp=yes
+fi
+
+if [ -n "${vmpt+x}" ]; then
+    vmp=yes
+    vmag=yes
+fi
+
+if [ -n "${vlrt+x}" ]; then
+    vlr=yes
+fi
+
+if [ -n "${tupt+x}" ]; then
+    tup=yes
+fi
+
+# 判断：至少启用一个协议
+any_proto_enabled() {
+    is_yes "$vlr" || is_yes "$vmp" || is_yes "$trp" || is_yes "$hyp" || is_yes "$tup"
+}
+
+# 已安装/未安装的参数规则检查
+if pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
+    # 已安装
+    if [ "${1:-}" = "rep" ]; then
+        any_proto_enabled || { echo "提示：rep重置协议时，请在脚本前至少设置一个协议变量哦，再见！💣"; exit 1; }
     fi
 else
-    if [ "$1" != "del" ]; then
-        [ "$vlr" = yes ] || [ "$vmp" = yes ] || [ "$trp" = yes ] || [ "$hyp" = yes ] || [ "$tup" = yes ] || [ "$anyp" = yes ]  || { echo "提示：未安装agsb脚本，请在脚本前至少设置一个协议变量哦，再见！💣"; exit; }
+    # 未安装
+    if [ "${1:-}" != "del" ]; then
+        any_proto_enabled || { echo "提示：未安装agsb脚本，请在脚本前至少设置一个协议变量哦，再见！💣"; exit 1; }
     fi
 fi
 
 
 
-# Install dependencies
 install_deps() {
-    echo "🔍 正在检测系统依赖…"
+    # 颜色（仅在本函数内使用，避免外部未定义）
+    local RED="\033[31m"
+    local GREEN="\033[32m"
+    local YELLOW="\033[33m"
+    local RESET="\033[0m"
 
-    # ---------- 系统识别 ----------
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS_ID="$ID"
-        OS_LIKE="$ID_LIKE"
+    # 等待 apt/dpkg 锁的最大秒数（默认 180 秒，可通过环境变量覆盖）
+    local max_wait="${APT_LOCK_WAIT:-180}"
+
+    echo -e "${YELLOW}正在安装依赖...${RESET}"
+
+    # =========================
+    # 依赖包（用数组，最稳）
+    # =========================
+    # 公共依赖（各发行版基本一致）
+    local COMMON_PKGS=(
+        curl wget jq openssl
+        iptables bc lsof
+        psmisc
+    )
+
+    # Debian/Ubuntu
+    local APT_PKGS=(
+        "${COMMON_PKGS[@]}"
+        uuid-runtime
+        cron
+    )
+
+    # CentOS/RHEL/Fedora（yum/dnf）
+    local YUM_DNF_PKGS=(
+        "${COMMON_PKGS[@]}"
+        util-linux
+        cronie
+    )
+
+    # Alpine
+    local APK_PKGS=(
+        "${COMMON_PKGS[@]}"
+        util-linux
+        cronie
+    )
+
+    # =========================
+    # Debian / Ubuntu
+    # =========================
+    if command -v apt-get >/dev/null 2>&1; then
+        export DEBIAN_FRONTEND=noninteractive
+
+        # 等待 apt/dpkg 锁（避免死等）
+        local waited=0
+        if command -v fuser >/dev/null 2>&1; then
+            while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+                  fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+                waited=$((waited + 1))
+                if [ "$waited" -ge "$max_wait" ]; then
+                    echo -e "${RED}❌ apt/dpkg 正在被占用超过 ${max_wait} 秒，退出。${RESET}"
+                    echo -e "${YELLOW}可能原因：apt-daily / unattended-upgrades 正在后台运行${RESET}"
+                    echo -e "${YELLOW}你可以尝试：${RESET}"
+                    echo -e "  ${YELLOW}sudo systemctl stop apt-daily.service apt-daily.timer 2>/dev/null${RESET}"
+                    echo -e "  ${YELLOW}sudo systemctl stop unattended-upgrades 2>/dev/null${RESET}"
+                    echo -e "${YELLOW}或者等待后台更新结束后再运行脚本${RESET}"
+                    echo -e "${YELLOW}也可以临时加大等待时间：${RESET}${GREEN}APT_LOCK_WAIT=600 bash sb.sh${RESET}"
+                    exit 1
+                fi
+                sleep 1
+            done
+        else
+            echo -e "${YELLOW}⚠️ 未检测到 fuser（psmisc），跳过 dpkg 锁检测${RESET}"
+        fi
+
+        echo -e "${YELLOW}正在执行 apt-get update...${RESET}"
+        apt-get -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=15 \
+                -o Acquire::https::Timeout=15 \
+                update || {
+            echo -e "${RED}❌ apt-get update 失败（可能是 DNS / 网络 / 源不可用）${RESET}"
+            exit 1
+        }
+
+        echo -e "${YELLOW}正在安装依赖包...${RESET}"
+        apt-get -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=15 \
+                -o Acquire::https::Timeout=15 \
+                install -y "${APT_PKGS[@]}" || {
+            echo -e "${RED}❌ Debian/Ubuntu 依赖安装失败${RESET}"
+            exit 1
+        }
+
+    # =========================
+    # CentOS / RHEL (yum)
+    # =========================
+    elif command -v yum >/dev/null 2>&1; then
+        echo -e "${YELLOW}正在使用 yum 安装依赖...${RESET}"
+        yum install -y "${YUM_DNF_PKGS[@]}" || {
+            echo -e "${RED}❌ CentOS/RHEL 依赖安装失败${RESET}"
+            exit 1
+        }
+
+    # =========================
+    # Fedora / RHEL (dnf)
+    # =========================
+    elif command -v dnf >/dev/null 2>&1; then
+        echo -e "${YELLOW}正在使用 dnf 安装依赖...${RESET}"
+        dnf install -y "${YUM_DNF_PKGS[@]}" || {
+            echo -e "${RED}❌ Fedora/RHEL 依赖安装失败${RESET}"
+            exit 1
+        }
+
+    # =========================
+    # Alpine (apk)
+    # =========================
+    elif command -v apk >/dev/null 2>&1; then
+        echo -e "${YELLOW}正在使用 apk 安装依赖...${RESET}"
+        apk add --no-cache "${APK_PKGS[@]}" || {
+            echo -e "${RED}❌ Alpine 依赖安装失败${RESET}"
+            exit 1
+        }
+
     else
-        OS_ID="unknown"
-        OS_LIKE=""
+        echo -e "${RED}❌ 未检测到支持的包管理器（apt/yum/dnf/apk）${RESET}"
+        exit 1
     fi
 
-    need_cmd() {
-        command -v "$1" >/dev/null 2>&1
-    }
-
-    # ---------- Alpine ----------
-    if [ "$OS_ID" = "alpine" ]; then
-        echo "📦 系统：Alpine Linux"
-
-        APK_PKGS=""
-
-        add_pkg() {
-            case " $APK_PKGS " in
-                *" $1 "*) ;;
-                *) APK_PKGS="$APK_PKGS $1" ;;
-            esac
-        }
-
-        need_cmd curl     || add_pkg curl
-        need_cmd wget     || add_pkg wget
-        need_cmd openssl  || add_pkg openssl
-        need_cmd shuf     || add_pkg coreutils
-        need_cmd base64   || add_pkg coreutils
-        need_cmd sed      || add_pkg sed
-        need_cmd awk      || add_pkg gawk
-
-        if [ -n "$APK_PKGS" ]; then
-            echo "⬇️  安装缺失依赖:$APK_PKGS"
-            apk add --no-cache $APK_PKGS || {
-                echo "❌ Alpine 依赖安装失败"
-                exit 1
-            }
-        else
-            echo "✅ Alpine 依赖已满足"
-        fi
-        return
-    fi
-
-    # ---------- Debian / Ubuntu ----------
-    if [ "$OS_ID" = "debian" ] || [ "$OS_ID" = "ubuntu" ] || echo "$OS_LIKE" | grep -q debian; then
-        echo "📦 系统：Debian / Ubuntu"
-
-        APT_PKGS=""
-
-        add_pkg() {
-            case " $APT_PKGS " in
-                *" $1 "*) ;;
-                *) APT_PKGS="$APT_PKGS $1" ;;
-            esac
-        }
-
-        need_cmd curl     || add_pkg curl
-        need_cmd wget     || add_pkg wget
-        need_cmd openssl  || add_pkg openssl
-        need_cmd shuf     || add_pkg coreutils
-        need_cmd base64   || add_pkg coreutils
-        need_cmd sed      || add_pkg sed
-        need_cmd awk      || add_pkg gawk
-        need_cmd crontab  || add_pkg cron
-
-        if [ -n "$APT_PKGS" ]; then
-            echo "⬇️  安装缺失依赖:$APT_PKGS"
-            apt-get update -y >/dev/null 2>&1
-            apt-get install -y $APT_PKGS || {
-                echo "❌ Debian / Ubuntu 依赖安装失败"
-                exit 1
-            }
-        else
-            echo "✅ Debian / Ubuntu 依赖已满足"
-        fi
-        return
-    fi
-
-    echo "⚠️ 未识别系统：$OS_ID"
-    echo "⚠️ 请自行确保以下命令存在："
-    echo "   curl wget openssl shuf base64 sed awk"
+    echo -e "${GREEN}✅ 依赖安装完成${RESET}"
 }
+
 
 # Environment variables for controlling CDN host and SNI values
 export cdn_host=${cdn_host:-"cdn.7zz.cn"}  # Default CDN host for vmess or trojan  www.visa.com
 export hy_sni=${hy_sni:-"www.bing.com"}    # Default SNI for hy2 protocol
 export vl_sni=${vl_sni:-"www.ua.edu"}   # Default SNI for vless protocol   www.ua.edu www.yahoo.com
 export tu_sni=${tu_sni:-"www.bing.com"}    # Default SNI for hy2 protocol
-export any_sni=${any_sni:-"www.bing.com"}   # Default SNI for AnyTLS protocol
 
 
 # Environment variables for ports and other settings
@@ -125,7 +193,6 @@ export port_tr=${trpt:-''};
 export port_hy2=${hypt:-''}; 
 export port_vlr=${vlrt:-''}; 
 export port_tu=${tupt:-''}; 
-export port_anytls=${anypt:-''}; 
 
 export cdnym=${cdnym:-''}; 
 export argo=${argo:-''}; 
@@ -139,7 +206,7 @@ export oap=${oap:-''}
 install_deps
 
 v46url="https://icanhazip.com"
-agsburl="https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb000.sh"
+agsburl="https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb.sh"
 
 # ================== 颜色函数 ==================
 white(){ echo -e "\033[1;37m$1\033[0m"; }
@@ -165,26 +232,27 @@ gradient() {
 # ================== 系统bashrc函数 ==================
 # Create .bashrc file if missing
 create_bashrc_if_missing() {
-  if [ ! -f /root/.bashrc ]; then
-    yellow "检测到系统缺失/root/.bashrc 文件,即将创建 /root/.bashrc 文件..."
-    touch /root/.bashrc
-    chmod 644 /root/.bashrc
-    echo "/root/.bashrc 文件已创建并设置了权限"
+  if [ ! -f "$HOME/.bashrc" ]; then
+    yellow "检测到系统缺失$HOME/.bashrc 文件,即将创建 $HOME/.bashrc 文件..."
+    touch "$HOME/.bashrc"
+    chmod 644 "$HOME/.bashrc"
+
+    echo "$HOME/.bashrc 文件已创建并设置了权限"
   else
-    echo "/root/.bashrc 文件已存在"
+    echo "$HOME/.bashrc 文件已存在"
   fi
 }
 
 create_bashrc_if_missing
 
 # ================== 系统bashrc函数 ==================
-VERSION="1.0.4(2026-01-15)"
+VERSION="1.0.2(2026-01-03)"
 AUTHOR="littleDoraemon"
 
 # Show script mode
 showmode(){
     blue "===================================================="
-    gradient "       agsb 一键脚本（vmess/trojan Argo选1,vless+hy2+tuic+anytls 4个直连）"
+    gradient "       agsb 一键脚本（vmess/trojan Argo选1,vless+hy2+tuic 3个直连）"
     green    "       作者：$AUTHOR"
     yellow   "       版本：$VERSION"
     blue "===================================================="
@@ -198,6 +266,23 @@ showmode(){
     echo "---------------------------------------------------------"
 }
 # ================== 处理tunnel的json ==================
+
+rand_port() {
+    # 优先用 shuf（最常见）
+    if command -v shuf >/dev/null 2>&1; then
+        shuf -i 10000-65535 -n 1
+        return
+    fi
+
+    # 备选：awk + 随机种子（兼容性很好）
+    if command -v awk >/dev/null 2>&1; then
+        awk 'BEGIN{srand(); print int(10000 + rand()*55535)}'
+        return
+    fi
+
+    # 兜底：用时间戳拼一个（保证有结果）
+    echo $(( ( $(date +%s) % 55535 ) + 10000 ))
+}
 
 
 # 用法：
@@ -223,7 +308,9 @@ prepare_argo_credentials() {
         mkdir -p "$HOME/agsb"
 
         # 写入 tunnel.json
-        echo "$auth" > "$HOME/agsb/tunnel.json"
+        #⚠️ 如果 ARGO_AUTH 里的 JSON 含有 \n、\r、\uXXXX 之类，echo 在某些 shell/实现里可能会解释转义，导致 tunnel.json 内容被破坏。 改法：用 printf 更可靠
+        printf '%s' "$auth" > "$HOME/agsb/tunnel.json"
+
 
         # 提取 TunnelID
         local tunnel_id
@@ -294,7 +381,16 @@ set_sbyx(){
 upsingbox(){
     url="https://github.com/jyucoeng/singbox-tools/releases/download/singbox/sing-box-$cpu"
     out="$HOME/agsb/sing-box"
-    (curl -Lo "$out" -# --retry 2 "$url") || (wget -O "$out" --tries=2 "$url")
+    (curl -Lo "$out" -# --connect-timeout 5 --max-time 120  --retry 2 --retry-delay 2 --retry-all-errors "$url") || (wget -O "$out" --tries=2 --timeout=120 --dns-timeout=5 --read-timeout=60 "$url")
+
+
+    # 下载结果校验：防止拿到空文件/错误页导致后续假安装
+    if [ ! -s "$out" ]; then
+        red "❌ 下载失败：文件为空 $out"
+        exit 1
+    fi
+
+
     chmod +x "$HOME/agsb/sing-box"
     sbcore=$("$HOME/agsb/sing-box" version 2>/dev/null | awk '/version/{print $NF}')
     echo "已安装Sing-box正式版内核：$sbcore"
@@ -339,41 +435,18 @@ EOF
     openssl ecparam -genkey -name prime256v1 -out "$HOME/agsb/tuic_private.key" >/dev/null 2>&1
     openssl req -new -x509 -key "$HOME/agsb/tuic_private.key" -out "$HOME/agsb/tuic_cert.pem" -days 3650 -subj "/CN=${tu_sni}" >/dev/null 2>&1
 
-   # Generate a new private key and certificate for anytls
-   # 生成私钥
-    openssl ecparam -genkey -name prime256v1 -out "$HOME/agsb/anytls_private.key" >/dev/null 2>&1
-
-    # 生成证书，添加SAN
-    openssl req -new -x509 -key "$HOME/agsb/anytls_private.key" -out "$HOME/agsb/anytls_cert.pem" -days 3650 \
-      -subj "/CN=${any_sni}" \
-      -addext "subjectAltName=DNS:${any_sni}" >/dev/null 2>&1
-
-
-
-    # 添加AnyTLS协议 (Since sing-box 1.12.0)
-    if [ -n "$anyp" ]; then
-        if [ -z "$port_anytls" ] && [ ! -e "$HOME/agsb/port_anytls" ]; then
-            port_anytls=$(shuf -i 10000-65535 -n 1)
-            echo "$port_anytls" > "$HOME/agsb/port_anytls"
-        elif [ -n "$port_anytls" ]; then
-            echo "$port_anytls" > "$HOME/agsb/port_anytls"
-        fi
-
-        port_anytls=$(cat "$HOME/agsb/port_anytls")
-        yellow "AnyTLS端口：$port_anytls"
-
-        # AnyTLS password (建议 base64)，如未指定则自动生成并落盘
-        # AnyTLS password 直接复用 UUID（与其它协议保持一致）
-        anytls_password="$uuid"
-
-        cat >> "$HOME/agsb/sb.json" <<EOF
-{"type": "anytls", "tag": "anytls-sb", "listen": "::", "listen_port": ${port_anytls}, "users": [ { "name": "anytls", "password": "${anytls_password}" } ], "tls": { "enabled": true, "insecure": true, "alpn": ["h2", "http/1.1"], "certificate_path": "$HOME/agsb/anytls_cert.pem", "key_path": "$HOME/agsb/anytls_private.key", "server_name": "${any_sni}" }},
-EOF
-    fi
 
     # 添加tuic协议
     if [ -n "$tup" ]; then
-        if [ -z "$port_tu" ] && [ ! -e "$HOME/agsb/port_tuic" ]; then port_tu=$(shuf -i 10000-65535 -n 1); echo "$port_tu" > "$HOME/agsb/port_tu"; elif [ -n "$port_tu" ]; then echo "$port_tu" > "$HOME/agsb/port_tu"; fi
+        if [ -n "$port_tu" ]; then
+            echo "$port_tu" > "$HOME/agsb/port_tu"
+        elif [ -s "$HOME/agsb/port_tu" ]; then
+            port_tu=$(cat "$HOME/agsb/port_tu")
+        else
+            port_tu=$(rand_port)
+            echo "$port_tu" > "$HOME/agsb/port_tu"
+        fi
+
         
         port_tu=$(cat "$HOME/agsb/port_tu"); 
         password=$uuid
@@ -387,7 +460,7 @@ EOF
 
     # 添加hy2协议
     if [ -n "$hyp" ]; then
-        if [ -z "$port_hy2" ] && [ ! -e "$HOME/agsb/port_hy2" ]; then port_hy2=$(shuf -i 10000-65535 -n 1); echo "$port_hy2" > "$HOME/agsb/port_hy2"; elif [ -n "$port_hy2" ]; then echo "$port_hy2" > "$HOME/agsb/port_hy2"; fi
+        if [ -z "$port_hy2" ] && [ ! -e "$HOME/agsb/port_hy2" ]; then port_hy2=$(rand_port); echo "$port_hy2" > "$HOME/agsb/port_hy2"; elif [ -n "$port_hy2" ]; then echo "$port_hy2" > "$HOME/agsb/port_hy2"; fi
         
         port_hy2=$(cat "$HOME/agsb/port_hy2"); 
         yellow "Hysteria2端口：$port_hy2"
@@ -399,7 +472,7 @@ EOF
     
     # 添加trojan协议
     if [ -n "$trp" ]; then
-        if [ -z "$port_tr" ] && [ ! -e "$HOME/agsb/port_tr" ]; then port_tr=$(shuf -i 10000-65535 -n 1); echo "$port_tr" > "$HOME/agsb/port_tr"; elif [ -n "$port_tr" ]; then echo "$port_tr" > "$HOME/agsb/port_tr"; fi
+        if [ -z "$port_tr" ] && [ ! -e "$HOME/agsb/port_tr" ]; then port_tr=$(rand_port); echo "$port_tr" > "$HOME/agsb/port_tr"; elif [ -n "$port_tr" ]; then echo "$port_tr" > "$HOME/agsb/port_tr"; fi
         
         port_tr=$(cat "$HOME/agsb/port_tr"); yellow "Trojan端口(Argo本地使用)：$port_tr"
 
@@ -410,7 +483,7 @@ EOF
 
    # 添加vmess协议
     if [ -n "$vmp" ]; then
-        if [ -z "$port_vm_ws" ] && [ ! -e "$HOME/agsb/port_vm_ws" ]; then port_vm_ws=$(shuf -i 10000-65535 -n 1); echo "$port_vm_ws" > "$HOME/agsb/port_vm_ws"; elif [ -n "$port_vm_ws" ]; then echo "$port_vm_ws" > "$HOME/agsb/port_vm_ws"; fi
+        if [ -z "$port_vm_ws" ] && [ ! -e "$HOME/agsb/port_vm_ws" ]; then port_vm_ws=$(rand_port); echo "$port_vm_ws" > "$HOME/agsb/port_vm_ws"; elif [ -n "$port_vm_ws" ]; then echo "$port_vm_ws" > "$HOME/agsb/port_vm_ws"; fi
         
         port_vm_ws=$(cat "$HOME/agsb/port_vm_ws"); 
         yellow "Vmess-ws端口 (Argo本地使用)：$port_vm_ws"
@@ -422,7 +495,7 @@ EOF
     # 添加vless-reality-vision协议
     if [ -n "$vlr" ]; then
         if [ -z "$port_vlr" ] && [ ! -e "$HOME/agsb/port_vlr" ];  then 
-            port_vlr=$(shuf -i 10000-65535 -n 1); 
+            port_vlr=$(rand_port); 
             echo "$port_vlr" > "$HOME/agsb/port_vlr"; 
         elif [ -n "$port_vlr" ]; then 
             echo "$port_vlr" > "$HOME/agsb/port_vlr"; 
@@ -455,7 +528,8 @@ EOF
 #  Generate Sing-box configuration file
 sbbout(){
     if [ -e "$HOME/agsb/sb.json" ]; then
-        sed -i '${s/,\s*$//}' "$HOME/agsb/sb.json"
+        sed -i '$ s/,[[:space:]]*$//' "$HOME/agsb/sb.json"
+
         cat >> "$HOME/agsb/sb.json" <<EOF
 ],
 "outbounds": [ { "type": "direct", "tag": "direct" }, { "type": "block", "tag": "block" } ],
@@ -470,7 +544,7 @@ After=network.target
 [Service]
 Type=simple
 NoNewPrivileges=yes
-ExecStart=/root/agsb/sing-box run -c /root/agsb/sb.json
+ExecStart=$HOME/agsb/sing-box run -c $HOME/agsb/sb.json
 Restart=on-failure
 RestartSec=5s
 [Install]
@@ -481,8 +555,8 @@ EOF
             cat > /etc/init.d/sing-box <<EOF
 #!/sbin/openrc-run
 description="sb service"
-command="/root/agsb/sing-box"
-command_args="run -c /root/agsb/sb.json"
+command="$HOME/agsb/sing-box"
+command_args="run -c $HOME/agsb/sb.json"
 command_background=yes
 pidfile="/run/sing-box.pid"
 depend() { need net; }
@@ -507,7 +581,16 @@ ensure_cloudflared() {
     url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$cpu"
     out="$HOME/agsb/cloudflared"
 
-    (curl -Lo "$out" -# --retry 2 "$url") || (wget -O "$out" --tries=2 "$url")
+    (curl -Lo "$out" -# --connect-timeout 5 --max-time 120 \
+      --retry 2 --retry-delay 2 --retry-all-errors "$url") \
+|| (wget -O "$out" --tries=2 --timeout=60 --dns-timeout=5 --read-timeout=60 "$url")
+
+    if [ ! -s "$out" ]; then
+        red "❌ 下载失败：文件为空 $out"
+        exit 1
+    fi
+
+
     chmod +x "$out"
 }
 
@@ -531,8 +614,14 @@ install_argo_service_systemd() {
     local mode="$1"
     local token="$2"
 
+     # 检查 systemd 是否存在
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo -e "${RED}系统未检测到 systemd，跳过 systemd 服务安装！${RESET}"
+        return
+    fi
+
     if [ "$mode" = "json" ]; then
-        cat > /etc/systemd/system/argo.service <<'EOF'
+        cat > /etc/systemd/system/argo.service <<EOF
 [Unit]
 Description=argo service
 After=network.target
@@ -540,7 +629,7 @@ After=network.target
 [Service]
 Type=simple
 NoNewPrivileges=yes
-ExecStart=/root/agsb/cloudflared tunnel --edge-ip-version auto --config /root/agsb/tunnel.yml run
+ExecStart=$HOME/agsb/cloudflared tunnel --edge-ip-version auto --config $HOME/agsb/tunnel.yml run
 Restart=on-failure
 RestartSec=5s
 
@@ -556,7 +645,7 @@ After=network.target
 [Service]
 Type=simple
 NoNewPrivileges=yes
-ExecStart=/root/agsb/cloudflared tunnel --no-autoupdate --edge-ip-version auto run --token ${token}
+ExecStart=$HOME/agsb/cloudflared tunnel --no-autoupdate --edge-ip-version auto run --token ${token}
 Restart=on-failure
 RestartSec=5s
 
@@ -568,15 +657,26 @@ EOF
     systemctl daemon-reload
     systemctl enable argo
     systemctl start argo
+    echo -e "${GREEN}Argo 服务已成功安装并启动（systemd）${RESET}"
 }
+
 
 
 install_argo_service_openrc() {
     local mode="$1"
     local token="$2"
 
+      # 检查 openrc 是否存在
+    if ! command -v rc-service >/dev/null 2>&1; then
+        echo -e "${RED}系统未检测到 openrc，跳过 openrc 服务安装！${RESET}"
+        return
+    fi
+
+    local command_path="$HOME/agsb/cloudflared"
+    local args=""
+
     if [ "$mode" = "json" ]; then
-        args="tunnel --edge-ip-version auto --config /root/agsb/tunnel.yml run"
+        args="tunnel --edge-ip-version auto --config $HOME/agsb/tunnel.yml run"
     else
         args="tunnel --no-autoupdate --edge-ip-version auto run --token ${token}"
     fi
@@ -584,7 +684,7 @@ install_argo_service_openrc() {
     cat > /etc/init.d/argo <<EOF
 #!/sbin/openrc-run
 description="argo service"
-command="/root/agsb/cloudflared"
+command="${command_path}"
 command_args="${args}"
 command_background=yes
 pidfile="/run/argo.pid"
@@ -594,7 +694,11 @@ EOF
     chmod +x /etc/init.d/argo
     rc-update add argo default
     rc-service argo start
+    echo -e "${GREEN}Argo 服务已成功安装并启动（openrc）${RESET}"
 }
+
+
+
 
 
 start_argo_no_daemon() {
@@ -653,12 +757,20 @@ wait_and_check_argo() {
 # 开机自启argo
 append_argo_cron_legacy() {
     # 只在启用了 argo + vmag 的情况下处理
-    [ -z "$argo" ] || [ -z "$vmag" ] && return
-
-    # 仅用于无 systemd / openrc 的系统
-    if pidof systemd >/dev/null 2>&1 || command -v rc-service >/dev/null 2>&1; then
+    if [ -z "$argo" ] || [ -z "$vmag" ]; then
         return
     fi
+
+
+    # systemd 永远不写 cron ✅
+    # openrc 只有 root 能装服务时才不写 cron ✅
+    # 非 root 的 openrc 环境会写 cron ✅
+
+   if pidof systemd >/dev/null 2>&1 || (command -v rc-service >/dev/null 2>&1 && [ "$EUID" -eq 0 ]); then
+        return
+   fi
+
+
 
     # 固定 Argo（token / JSON）
     if [ -n "${ARGO_DOMAIN}" ] && [ -n "${ARGO_AUTH}" ]; then
@@ -677,54 +789,72 @@ append_argo_cron_legacy() {
     fi
 }
 
+
 post_install_finalize_legacy() {
-    # =====================================================
-    # 等待进程启动（原版行为）
-    # =====================================================
     sleep 5
     echo
 
-    # =====================================================
-    # 原版“总闸门”：检测 agsb 相关进程
-    # =====================================================
-    if find /proc/*/exe -type l 2>/dev/null | grep -E '/proc/[0-9]+/exe' \
-        | xargs -r readlink 2>/dev/null \
-        | grep -Eq 'agsb/(sing-box|c)' \
-        || pgrep -f 'agsb/(sing-box|c)' >/dev/null 2>&1
-    then
-        # =================================================
-        # bashrc 注入（原版逻辑）
-        # =================================================
+    if pgrep -f "$HOME/agsb/sing-box" >/dev/null 2>&1 || pgrep -f "$HOME/agsb/cloudflared" >/dev/null 2>&1; then
+
         [ -f ~/.bashrc ] || touch ~/.bashrc
         sed -i '/agsb/d' ~/.bashrc
 
         SCRIPT_PATH="$HOME/bin/agsb"
         mkdir -p "$HOME/bin"
-        (curl -sL "$agsburl" -o "$SCRIPT_PATH") || (wget -qO "$SCRIPT_PATH" "$agsburl")
+
+        # ✅ 下载主脚本：加超时/重试，避免卡住
+        (curl -sL --connect-timeout 5 --max-time 120 \
+              --retry 2 --retry-delay 2 --retry-all-errors \
+              "$agsburl" -o "$SCRIPT_PATH") \
+        || (wget -qO "$SCRIPT_PATH" --tries=2 --timeout=60 "$agsburl")
+
+        # ✅ 下载结果校验：防止空文件/错误页
+        if [ ! -s "$SCRIPT_PATH" ]; then
+            red "❌ 下载主脚本失败：文件为空 $SCRIPT_PATH"
+            exit 1
+        fi
+
         chmod +x "$SCRIPT_PATH"
 
         # 仅在无 systemd / openrc 时写 bashrc 自启
         if ! pidof systemd >/dev/null 2>&1 && ! command -v rc-service >/dev/null 2>&1; then
-            echo "if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then export  \
-vl_sni=\"${vl_sni}\"  tu_sni=\"${tu_sni}\"  hy_sni=\"${hy_sni}\"  any_sni=\"${any_sni}\" \
-cdn_host=\"${cdn_host}\"  shord_id=\"${shord_id}\" cdnym=\"${cdnym}\" \
-name=\"${name}\" ippz=\"${ippz}\" argo=\"${argo}\" uuid=\"${uuid}\" \
-$vmp=\"${port_vm_ws}\" $trp=\"${port_tr}\" $hyp=\"${port_hy2}\" \
-$tup=\"${port_tu}\" $anyp=\"${port_anytls}\"  $vlr=\"${port_vlr}\" \
-agn=\"${ARGO_DOMAIN}\" agk=\"${ARGO_AUTH}\"; \
-bash \"$HOME/bin/agsb\"; fi" >> ~/.bashrc
+            # ✅ 更安全的 bashrc 写入方式：heredoc（避免引号地狱）
+            # 说明：
+            # - 这里写入的是“固定文本”，里面包含 ${name} 这类变量的展开值（在写入时已经被替换成具体值）
+            # - bashrc 运行时只负责 export，并调用 $HOME/bin/agsb
+            cat >> "$HOME/.bashrc" <<EOF
+# agsb auto start (added by installer)
+if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
+  export \
+    vl_sni="${vl_sni}" \
+    tu_sni="${tu_sni}" \
+    hy_sni="${hy_sni}" \
+    cdn_host="${cdn_host}" \
+    short_id="${short_id}" \
+    cdnym="${cdnym}" \
+    name="${name}" \
+    ippz="${ippz}" \
+    argo="${argo}" \
+    uuid="${uuid}" \
+    vmpt="${port_vm_ws}" \
+    trpt="${port_tr}" \
+    hypt="${port_hy2}" \
+    tupt="${port_tu}" \
+    vlrt="${port_vlr}" \
+    agn="${ARGO_DOMAIN}" \
+    agk="${ARGO_AUTH}"
+  bash "\$HOME/bin/agsb"
+fi
+EOF
         fi
 
-        # PATH 注入（原版逻辑）
+        # PATH 注入
         sed -i '/export PATH="\$HOME\/bin:\$PATH"/d' ~/.bashrc
         echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
-        grep -qxF 'source ~/.bashrc' ~/.bash_profile 2>/dev/null \
-            || echo 'source ~/.bashrc' >> ~/.bash_profile
+        grep -qxF 'source ~/.bashrc' ~/.bash_profile 2>/dev/null || echo 'source ~/.bashrc' >> ~/.bash_profile
         . ~/.bashrc 2>/dev/null
 
-        # =================================================
-        # crontab 处理（原版逻辑 + JSON 兼容）
-        # =================================================
+        # crontab 处理
         crontab -l > /tmp/crontab.tmp 2>/dev/null
 
         # sing-box cron（仅无 systemd / openrc）
@@ -737,7 +867,7 @@ bash \"$HOME/bin/agsb\"; fi" >> ~/.bashrc
         # 清理旧的 cloudflared cron
         sed -i '/agsb\/cloudflared/d' /tmp/crontab.tmp
 
-        # 👉 写入 Argo cron（token / JSON / 临时三态）
+        # 写入 Argo cron（token / JSON / 临时三态）
         append_argo_cron_legacy
 
         crontab /tmp/crontab.tmp >/dev/null 2>&1
@@ -746,8 +876,8 @@ bash \"$HOME/bin/agsb\"; fi" >> ~/.bashrc
         green "agsb脚本进程启动成功，安装完毕"
         sleep 2
     else
-        echo "agsb脚本进程未启动，安装失败"
-        exit
+        red "agsb脚本进程未启动，安装失败"
+        exit 1
     fi
 }
 
@@ -827,30 +957,44 @@ write2AgsbFolders(){
     echo "${vl_sni}" > "$HOME/agsb/vl_sni"
     echo "${hy_sni}" > "$HOME/agsb/hy_sni"
     echo "${tu_sni}" > "$HOME/agsb/tu_sni"
-    echo "${any_sni}" > "$HOME/agsb/any_sni"
     echo "${cdn_host}" > "$HOME/agsb/cdn_host"
 }
 
 #   show status
-agsbstatus(){
-    purple "=========当前内核运行状态========="
+agsbstatus() {
+    echo -e "${YELLOW}检查 agsb 和 cloudflared 的状态...${RESET}"
 
-    # Check if Sing-box is running
-    if pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
-        singbox_version=$("$HOME/agsb/sing-box" version 2>/dev/null | awk '/version/{print $NF}')
-        echo "Sing-box (版本V$singbox_version)：$(green "运行中")"  # Green for running
+    # 检查 sing-box 是否运行
+    if pgrep -f "$HOME/agsb/sing-box" >/dev/null; then
+        echo -e "${GREEN}sing-box 正在运行...${RESET}"
     else
-        echo "Sing-box：$(red "未启用")"  # Red for not enabled
+        echo -e "${RED}sing-box 未运行！${RESET}"
     fi
 
-    # Check if cloudflared Argo is running
-    if pgrep -f 'agsb/c' >/dev/null 2>&1; then
-        cloudflared_version=$("$HOME/agsb/cloudflared" version 2>/dev/null | awk '{print $3}')
-        echo "cloudflared Argo (版本V$cloudflared_version)：$(green "运行中")"  # Green for running
+    # 检查 cloudflared 是否运行
+    if pgrep -f "$HOME/agsb/cloudflared" >/dev/null; then
+        echo -e "${GREEN}cloudflared 正在运行...${RESET}"
     else
-        echo "Argo：$(red "未启用")"  # Red for not enabled
+        echo -e "${RED}cloudflared 未运行！${RESET}"
     fi
+
+    cloudflared_version=$("$HOME/agsb/cloudflared" version 2>/dev/null | grep -oP '\d+\.\d+\.\d+')
+    singbox_version=$("$HOME/agsb/sing-box" version 2>/dev/null | grep -oP '\d+\.\d+\.\d+')
+
+    if [ -n "$cloudflared_version" ]; then
+        echo -e "${GREEN}cloudflared 版本: $cloudflared_version${RESET}"
+    else
+        echo -e "${RED}无法获取 cloudflared 版本！${RESET}"
+    fi
+
+    if [ -n "$singbox_version" ]; then
+        echo -e "${GREEN}sing-box 版本: $singbox_version${RESET}"
+    else
+        echo -e "${RED}无法获取 sing-box 版本！${RESET}"
+    fi
+
 }
+
 
 # show nodes
 cip(){
@@ -894,27 +1038,6 @@ cip(){
         green "$tuic_link" | tee -a "$HOME/agsb/jh.txt"
         echo;
     fi
-
-    # AnyTLS protocol (anytls)
-    if grep -q "anytls-sb" "$HOME/agsb/sb.json"; then
-        port_anytls=$(cat "$HOME/agsb/port_anytls")
-        any_sni=$(cat "$HOME/agsb/any_sni" 2>/dev/null || echo "${any_sni}")
-        password=$uuid
-       # anytls_link="anytls://${uuid}:${password}@${server_ip}:${port_anytls}?sni=${any_sni}&security=tls&alpn=h3&allow_insecure=1#${sxname}anytls-$hostname"
-        anytls_link="anytls://${password}@${server_ip}:${port_anytls}?sni=${any_sni}&alpn=h2,http/1.1&allow_insecure=true#${sxname}anytls-$hostname"
-
-
-    
-        yellow "💣【 AnyTLS 】(直连协议)"
-        green "$anytls_link" | tee -a "$HOME/agsb/jh.txt"
-
-        purple "Surge版AnyTLS(直连协议，给有surge的小伙伴用的)："
-        surge_anytls_link="${sxname}anytls-$hostname = anytls, ${server_ip}, ${port_anytls}, password=${uuid}, sni=${any_sni}, alpn=h2,http/1.1, allow_insecure=true"
-
-        green "$surge_anytls_link"
-        echo;
-    fi
-
     # VLESS-Reality-Vision protocol (vless-reality-vision)
     if grep -q "vless-reality-vision-sb" "$HOME/agsb/sb.json"; then
         port_vlr=$(cat "$HOME/agsb/port_vlr")
@@ -934,7 +1057,8 @@ cip(){
     if [ -n "$argodomain" ]; then
         vlvm=$(cat $HOME/agsb/vlvm 2>/dev/null); uuid=$(cat "$HOME/agsb/uuid")
         if [ "$vlvm" = "Vmess" ]; then
-            vmatls_link1="vmess://$(echo "{\"v\":\"2\",\"ps\":\"${sxname}vmess-ws-tls-argo-$hostname-443\",\"add\":\"${cdn_host}\",\"port\":\"443\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"host\":\"$argodomain\",\"path\":\"/${uuid}-vm\",\"tls\":\"tls\",\"sni\":\"$argodomain\"}" | base64 -w0)"
+            vmatls_link1="vmess://$(echo "{\"v\":\"2\",\"ps\":\"${sxname}vmess-ws-tls-argo-$hostname-443\",\"add\":\"${cdn_host}\",\"port\":\"443\",\"id\":\"$uuid\",\"aid\":\"0\",\"net\":\"ws\",\"host\":\"$argodomain\",\"path\":\"/${uuid}-vm\",\"tls\":\"tls\",\"sni\":\"$argodomain\"}" | base64 | tr -d '\n')"
+           
             tratls_link1=""
         elif [ "$vlvm" = "Trojan" ]; then
             tratls_link1="trojan://${uuid}@${cdn_host}:443?security=tls&type=ws&host=${argodomain}&path=%2F${uuid}-tr&sni=${argodomain}&fp=chrome#${sxname}trojan-ws-tls-argo-$hostname-443"
@@ -967,19 +1091,21 @@ cip(){
 # Remove agsb folder
 cleandel(){
     # Change to $HOME to avoid issues when deleting directories
-    cd $HOME
+   cd "$HOME" || exit 1
 
     # Continue with the cleanup
     for P in /proc/[0-9]*; do
         if [ -L "$P/exe" ]; then
             TARGET=$(readlink -f "$P/exe" 2>/dev/null)
-            if echo "$TARGET" | grep -qE '/agsb/c|/agsb/sing-box'; then 
+            if echo "$TARGET" | grep -qE '/agsb/cloudflared|/agsb/sing-box'; then 
                 kill "$(basename "$P")" 2>/dev/null
             fi
         fi
     done
 
-    kill -15 $(pgrep -f 'agsb/c' 2>/dev/null) $(pgrep -f 'agsb/sing-box' 2>/dev/null) >/dev/null 2>&1
+    pkill -15 -f "$HOME/agsb/sing-box" 2>/dev/null
+    pkill -15 -f "$HOME/agsb/cloudflared" 2>/dev/null
+
     sed -i '/agsb/d' ~/.bashrc
     sed -i '/export PATH="\$HOME\/bin:\$PATH"/d' ~/.bashrc
     . ~/.bashrc 2>/dev/null
@@ -1007,7 +1133,8 @@ cleandel(){
 
 # Restart sing-box
 sbrestart(){
-    kill -15 $(pgrep -f 'agsb/sing-box' 2>/dev/null) >/dev/null 2>&1
+    pkill -15 -f "$HOME/agsb/sing-box" 2>/dev/null
+
     if pidof systemd >/dev/null 2>&1; then
         systemctl restart sb
     elif command -v rc-service >/dev/null 2>&1; then
@@ -1020,7 +1147,7 @@ sbrestart(){
 # Restart argo
 argorestart(){
     # 先尽力停止现有 cloudflared 进程（原版行为）
-    kill -15 $(pgrep -f 'agsb/c' 2>/dev/null) >/dev/null 2>&1
+   pkill -15 -f "$HOME/agsb/cloudflared" 2>/dev/null
 
     # ===============================
     # systemd 管理
@@ -1072,19 +1199,63 @@ argorestart(){
     fi
 }
 
-if [ "$1" = "del" ]; then cleandel; rm -rf "$HOME/agsb"; echo "卸载完成"; showmode; exit; fi
-if [ "$1" = "rep" ]; then cleandel; rm -rf "$HOME/agsb"/{sb.json,sbargoym.log,sbargotoken.log,argo.log,argoport.log,cdnym,name,short_id,cdn_host,hy_sni,vl_sni,tu_sni,any_sni,port_anytls,anytls_pass}; echo "重置完成..."; sleep 2; fi
-if [ "$1" = "list" ]; then cip; exit; fi
-if [ "$1" = "ups" ]; then kill -15 $(pgrep -f 'agsb/sing-box' 2>/dev/null); upsingbox && sbrestart && echo "Sing-box内核更新完成" && sleep 2 && cip; exit; fi
-if [ "$1" = "res" ]; then sbrestart; argorestart; sleep 5 && echo "重启完成" && sleep 3 && cip; exit; fi
+if [ "$1" = "del" ]; then 
+    cleandel; 
+    rm -rf "$HOME/agsb"; 
+    echo "卸载完成"; 
+    showmode; 
+    exit;
+ fi
+if [ "$1" = "rep" ]; then 
+    cleandel; 
+    rm -rf "$HOME/agsb"/{sb.json,sbargoym.log,sbargotoken.log,argo.log,argoport.log,cdnym,name,short_id,cdn_host,hy_sni,vl_sni,tu_sni}; 
+    echo "重置完成..."; 
+    sleep 2; 
+fi
+
+if [ "$1" = "list" ]; then 
+    cip; 
+    exit; 
+fi
+if [ "$1" = "ups" ]; then 
+    pkill -15 -f "$HOME/agsb/sing-box" 2>/dev/null
+
+    upsingbox && sbrestart && echo "Sing-box内核更新完成" && sleep 2 && cip; 
+    exit; 
+fi
+if [ "$1" = "res" ]; then 
+    sbrestart; argorestart; 
+    sleep 5 && echo "重启完成" && sleep 3 && cip; 
+    exit; 
+fi
 if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1 && [ "$1" != "rep" ]; then
     cleandel
 fi
 if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1 || [ "$1" = "rep" ]; then
-    if [ -z "$( (curl -s4m5 -k "$v46url") || (wget -4 -qO- --tries=2 "$v46url") )" ]; then echo -e "nameserver 2a00:1098:2b::1\nnameserver 2a00:1098:2c::1" > /etc/resolv.conf; fi
-    echo "VPS系统：$op"; echo "CPU架构：$cpu"; echo "agsb脚本开始安装/更新…………" && sleep 1
-    if [ -n "$oap" ]; then setenforce 0 >/dev/null 2>&1; iptables -F; iptables -P INPUT ACCEPT; netfilter-persistent save >/dev/null 2>&1; echo "iptables执行开放所有端口"; fi
-    ins; cip
+    if [ -z "$( (curl -s4m5 -k "$v46url") || (wget -4 -qO- --tries=2 "$v46url") )" ]; then 
+        cp -f /etc/resolv.conf /etc/resolv.conf.bak.agsb 2>/dev/null
+        echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 2606:4700:4700::1111\nnameserver 2001:4860:4860::8888" > /etc/resolv.conf
+    
+    fi
+    echo "VPS系统：$op"; 
+    echo "CPU架构：$cpu"; 
+    echo "agsb脚本开始安装/更新…………" && sleep 1
+
+    if [ -n "$oap" ]; then 
+        setenforce 0 >/dev/null 2>&1; 
+        iptables -F; 
+        iptables -P INPUT ACCEPT; 
+        netfilter-persistent save >/dev/null 2>&1;
+        echo "iptables执行开放所有端口"; 
+    fi
+    ins; 
+    cip
 else
-    echo "agsb脚本已安装"; echo; agsbstatus; echo; echo "相关快捷方式如下："; showmode; exit
+    echo "agsb脚本已安装"; 
+    echo; 
+    agsbstatus; 
+    echo; 
+    echo "相关快捷方式如下："; 
+    showmode; 
+    exit
 fi
