@@ -3,6 +3,19 @@ export LANG=en_US.UTF-8
 #!/usr/bin/env bash
 export LANG=en_US.UTF-8
 
+# 颜色（仅在本函数内使用，避免外部未定义）
+ RED="\033[31m"
+ GREEN="\033[32m"
+ YELLOW="\033[33m"
+ RESET="\033[0m"
+ # ================== 颜色函数 ==================
+white(){ echo -e "\033[1;37m$1\033[0m"; }
+red(){ echo -e "\e[1;91m$1\033[0m"; }
+green(){ echo -e "\e[1;32m$1\033[0m"; }
+yellow(){ echo -e "\e[1;33m$1\033[0m"; }
+blue(){ echo -e "\e[1;34m$1\033[0m"; }
+purple(){ echo -e "\e[1;35m$1\033[0m"; }
+
 # 统一判断工具：只有值严格等于 yes 才视为启用
 is_yes() { [ "${1:-}" = "yes" ]; }
 
@@ -51,12 +64,9 @@ fi
 
 
 
+
 install_deps() {
-    # 颜色（仅在本函数内使用，避免外部未定义）
-    local RED="\033[31m"
-    local GREEN="\033[32m"
-    local YELLOW="\033[33m"
-    local RESET="\033[0m"
+
 
     # 等待 apt/dpkg 锁的最大秒数（默认 180 秒，可通过环境变量覆盖）
     local max_wait="${APT_LOCK_WAIT:-180}"
@@ -225,13 +235,7 @@ check_and_install_deps "$1"
 v46url="https://icanhazip.com"
 agsburl="https://raw.githubusercontent.com/jyucoeng/singbox-tools/refs/heads/main/sb000.sh"
 
-# ================== 颜色函数 ==================
-white(){ echo -e "\033[1;37m$1\033[0m"; }
-red(){ echo -e "\e[1;91m$1\033[0m"; }
-green(){ echo -e "\e[1;32m$1\033[0m"; }
-yellow(){ echo -e "\e[1;33m$1\033[0m"; }
-blue(){ echo -e "\e[1;34m$1\033[0m"; }
-purple(){ echo -e "\e[1;35m$1\033[0m"; }
+
 
 #彩虹打印
 gradient() {
