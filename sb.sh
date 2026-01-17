@@ -971,7 +971,8 @@ agsbstatus() {
 
     #singbox 的版本格式为r.1.12.13 这样，返回1.12.13
    singbox_version=$("$HOME/agsb/sing-box" version 2>/dev/null | sed -n 's/.*r\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
-   cloudflared_version=$("$HOME/agsb/cloudflared" version 2>/dev/null | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+   cloudflared_version=$("$HOME/agsb/cloudflared" version 2>/dev/null | sed -n 's/.*\([0-9]\{4\}\.[0-9]\+\.[0-9]\+\).*/\1/p')
+
 
     if [ -n "$singbox_version" ]; then
          echo "Sing-box (版本V$singbox_version)：$(green "运行中")"
