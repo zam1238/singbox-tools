@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 export LANG=en_US.UTF-8
-#!/usr/bin/env bash
-export LANG=en_US.UTF-8
 
 # 颜色（仅在本函数内使用，避免外部未定义）
 
