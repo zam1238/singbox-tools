@@ -1406,7 +1406,13 @@ cip(){
     fi
 
     update_subscription_file
-    yellow "📌 节点订阅地址：$(show_sub_url)"
+    yellow "📌 节点订阅地址："
+    if ! is_true "$(get_subscribe_flag)"; then
+        purple "⛔ 未开启订阅"
+    else
+        yellow "$(show_sub_url)"
+    fi
+
 
     echo; 
     yellow "聚合节点: cat $HOME/agsb/jh.txt"; 
@@ -1601,21 +1607,20 @@ if [ "$1" = "res" ]; then
 fi
 
 if [ "$1" = "sub" ]; then
-  if ! is_true "$(get_subscribe_flag)"; then
-    yellow "订阅未启用（subscribe=false），如需订阅请在脚本前加：subscribe=true 并执行 rep"
-    exit 0
-  fi
-
+  # 生成/更新订阅文件 sub.txt（函数内部会打印 subscribe 状态 + 生成结果）
   update_subscription_file
 
-  u="$(show_sub_url)"
-  if [ -n "$u" ]; then
-    echo "$u"
+  echo -e "📌 节点订阅地址："
+  if ! is_true "$(get_subscribe_flag)"; then
+    purple "⛔ 未开启订阅"
   else
-    red "❌ 订阅链接为空（可能 uuid 未生成）"
+    u="$(show_sub_url)"
+    echo -e "$u\n"
   fi
-  exit 0
+
+  exit;
 fi
+
 
 
 if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1 && [ "$1" != "rep" ]; then
