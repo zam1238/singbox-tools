@@ -1376,6 +1376,8 @@ if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
     tu_sni="${tu_sni}" \
     hy_sni="${hy_sni}" \
     cdn_host="${cdn_host}" \
+    cdn_pt="${cdn_pt}" \
+    vl_sni_pt="${vl_sni_pt}" \
     short_id="${short_id}" \
     cdnym="${cdnym}" \
     name="${name}" \
@@ -1565,6 +1567,8 @@ write2AgsbFolders(){
   # ✅ 只写新变量
   echo "${nginx_pt}"  > "$HOME/agsb/nginx_port"
   echo "${argo_pt}"   > "$HOME/agsb/argo_port"
+
+  echo "${vl_sni_pt}" > "$HOME/agsb/vl_sni_pt"
 
   # ✅ 订阅开关落盘（默认 false）
   echo "${subscribe}" > "$HOME/agsb/subscribe"
@@ -2073,7 +2077,7 @@ if [ "$1" = "del" ]; then
  fi
 if [ "$1" = "rep" ]; then 
     cleandel; 
-    rm -rf "$HOME/agsb"/{sb.json,sbargoym.log,sbargotoken.log,argo.log,argoport.log,cdnym,name,short_id,cdn_host,hy_sni,vl_sni,tu_sni}; 
+    rm -rf "$HOME/agsb"/{sb.json,sbargoym.log,sbargotoken.log,argo.log,argoport.log,cdnym,name,short_id,cdn_host,hy_sni,vl_sni,tu_sni,vl_sni_pt,cdn_pt}; 
     echo "重置完成..."; 
     sleep 2; 
 fi
