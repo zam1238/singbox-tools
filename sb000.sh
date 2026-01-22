@@ -1224,8 +1224,11 @@ show_sub_url() {
 
 
 
-
-
+append_jh() {
+  # 只写纯文本到聚合文件，禁止任何颜色码污染订阅
+  # 用 echo -e 是为了支持变量里自带的 \n 换行
+  echo -e "$1" >> "$HOME/agsb/jh.txt"
+}
 
 # show nodes
 cip(){
@@ -1253,7 +1256,8 @@ cip(){
         hy_sni=$(cat "$HOME/agsb/hy_sni"); 
         hy2_link="hysteria2://$uuid@$server_ip:$port_hy2?security=tls&alpn=h3&insecure=1&sni=${hy_sni}#${sxname}hy2-$hostname"; 
         yellow "💣【 Hysteria2 】(直连协议)"; 
-        green "$hy2_link" | tee -a "$HOME/agsb/jh.txt"; 
+        green "$hy2_link"
+        append_jh "$hy2_link"
         echo; 
     fi
     
@@ -1266,7 +1270,8 @@ cip(){
 
         tuic_link="tuic://${uuid}:${password}@${server_ip}:${port_tu}?sni=${tu_sni}&congestion_control=bbr&security=tls&udp_relay_mode=native&alpn=h3&allow_insecure=1#${sxname}tuic-$hostname"
         yellow "💣【 TUIC 】(直连协议)"
-        green "$tuic_link" | tee -a "$HOME/agsb/jh.txt"
+        green "$tuic_link" 
+        append_jh "$tuic_link"
         echo;
     fi
     # VLESS-Reality-Vision protocol (vless-reality-vision)
@@ -1280,7 +1285,10 @@ cip(){
        # vless_link="vless://${uuid}@${server_ip}:${port_vlr}?encryption=none&security=reality&sni=www.yahoo.com&fp=chrome&flow=xtls-rprx-vision&publicKey=${public_key}&shortId=${short_id}#${sxname}vless-reality-$hostname"
         
         vless_link="vless://${uuid}@${server_ip}:${port_vlr}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${vl_sni}&fp=chrome&pbk=${public_key}&sid=${short_id}&type=tcp&headerType=none#${sxname}vless-reality-$hostname" 
-        yellow "💣【 VLESS-Reality-Vision 】(直连协议)"; green "$vless_link" | tee -a "$HOME/agsb/jh.txt"; echo;
+        yellow "💣【 VLESS-Reality-Vision 】(直连协议)"; 
+        green "$vless_link"
+        append_jh "$vless_link"
+        echo;
     fi
     #argodomain=$(cat "$HOME/agsb/sbargoym.log" 2>/dev/null); [ -z "$argodomain" ] && argodomain=$(grep -a trycloudflare.com "$HOME/agsb/argo.log" 2>/dev/null | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}')
    
@@ -1314,8 +1322,8 @@ cip(){
 
         green ""
         green "💣 443端口 Argo-TLS 节点 (优选IP可替换):"
-        green "${vmatls_link1}${tratls_link1}" | tee -a "$HOME/agsb/jh.txt"
-
+        green "${vmatls_link1}${tratls_link1}" 
+        append_jh "${vmatls_link1}${tratls_link1}"
         yellow "---------------------------------------------------------"
 
 
