@@ -1338,7 +1338,7 @@ agsbstatus() {
 
   # 2) Argo 状态（细分：不需要 / 需要但未运行 / 运行中）
   if ! $argo_needed; then
-    echo "Argo：⛔ $(purple "未启用")（当前场景无需 Argo）"
+    echo "Argo：✅ $(purple "未启用")（当前场景无需 Argo）"
   else
     if pgrep -f "$HOME/agsb/cloudflared" >/dev/null 2>&1; then
       # 兼容：cloudflared version 2025.11.1
@@ -1364,7 +1364,7 @@ agsbstatus() {
 
   # ✅ 不需要 nginx 的场景：明确说明（既不安装也不启动）
   if ! $nginx_needed; then
-    echo "Nginx：⛔ $(purple "未安装/未启用")（符合 subscribe=false 且未启用 Argo）"
+    echo "Nginx：✅ $(purple "未安装/未启用")（符合 subscribe=false 且未启用 Argo）"
     return 0
   fi
 
