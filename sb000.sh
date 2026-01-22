@@ -568,7 +568,7 @@ get_short_id() {
         fi
       fi
       echo "$sid" > "$sid_file"
-      green "✅ short_id 已由 reality_private 稳定推导, 值: $sid"
+      green "✅ short_id 已由 reality_private 稳定推导, 值: $sid" >&2
       echo "$sid"
       return 0
     fi
@@ -579,7 +579,7 @@ get_short_id() {
     sid="$(cat "$sid_file" 2>/dev/null | tr -d ' \r\n')"
     sid="${sid,,}"
     if _is_hex "$sid"; then
-      yellow "从文件中读取 short_id, 值: $sid"
+      yellow "从文件中读取 short_id, 值: $sid" >&2
       echo "$sid"
       return 0
     else
