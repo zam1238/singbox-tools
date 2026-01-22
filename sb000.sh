@@ -225,7 +225,6 @@ export port_hy2=${hypt:-''};
 export port_vlr=${vlrt:-''}; 
 export port_tu=${tupt:-''}; 
 
-export cdnym=${cdnym:-''}; 
 export argo=${argo:-''}; 
 export ARGO_DOMAIN=${agn:-''}; 
 export ARGO_AUTH=${agk:-''}; 
@@ -1392,7 +1391,6 @@ if ! pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
     cdn_pt="${cdn_pt}" \
     vl_sni_pt="${vl_sni_pt}" \
     short_id="${short_id}" \
-    cdnym="${cdnym}" \
     name="${name}" \
     ippz="${ippz}" \
     argo="${argo}" \
@@ -1579,7 +1577,6 @@ write2AgsbFolders(){
 
   # ✅ 只写新变量
   echo "${nginx_pt}"  > "$HOME/agsb/nginx_port"
-  echo "${argo_pt}"   > "$HOME/agsb/argo_port"
 
   echo "${vl_sni_pt}" > "$HOME/agsb/vl_sni_pt"
 
@@ -2090,7 +2087,7 @@ if [ "$1" = "del" ]; then
  fi
 if [ "$1" = "rep" ]; then 
     cleandel; 
-    rm -rf "$HOME/agsb"/{sb.json,sbargoym.log,sbargotoken.log,argo.log,argoport.log,cdnym,name,short_id,cdn_host,hy_sni,vl_sni,tu_sni,vl_sni_pt,cdn_pt}; 
+    rm -rf "$HOME/agsb"/{sb.json,sbargoym.log,sbargotoken.log,argo.log,argoport.log,name,short_id,cdn_host,hy_sni,vl_sni,tu_sni,vl_sni_pt,cdn_pt}; 
     echo "重置完成..."; 
     sleep 2; 
 fi
