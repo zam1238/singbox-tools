@@ -1708,7 +1708,7 @@ update_subscription_file() {
   # ✅ 优先用 openssl（更通用）
   if command -v openssl >/dev/null 2>&1; then
     if openssl base64 -A -in "$HOME/agsb/jh.txt" > "$out" 2>/dev/null; then
-      green "✅ sub.txt 生成成功：$out"
+      purple "✅ sub.txt 生成成功：$out"
       return 0
     else
       red "❌ sub.txt 生成失败（openssl base64）"
@@ -1719,13 +1719,13 @@ update_subscription_file() {
   # ✅ fallback：base64（兼容 busybox 与 GNU）
   if command -v base64 >/dev/null 2>&1; then
     if base64 -w 0 "$HOME/agsb/jh.txt" 2>/dev/null > "$out"; then
-      green "✅ sub.txt 生成成功：$out"
+      purple "✅ sub.txt 生成成功：$out"
       return 0
     fi
 
     # busybox base64 没有 -w 参数
     if base64 "$HOME/agsb/jh.txt" 2>/dev/null | tr -d '\n' > "$out"; then
-      green "✅ sub.txt 生成成功：$out"
+      purple "✅ sub.txt 生成成功：$out"
       return 0
     else
       red "❌ sub.txt 生成失败（base64）"
