@@ -1249,40 +1249,54 @@ start_argo_no_daemon() {
 
 
 wait_and_check_argo() {
-  local argoname="$1"   # 固定域名（如果有）
+  local argo_tunnel_type="${1:-临时}"  # 第一个参数：隧道类型（固定/临时）
   local argo_log="$HOME/agsb/argo.log"
   local ym_log="$HOME/agsb/sbargoym.log"
   local argodomain=""
   local i=0
   local max_wait=25
 
-  # ✅ 没启用 argo：直接跳过（这是你想要的“压根不需要 argo 的场景”）
- if ! need_argo; then
+  # ✅ 没启用 argo：直接跳过
+  if ! need_argo; then
     purple "ℹ️ 未启用 Argo，跳过 Argo 域名检查"
     return 0
   fi
 
-  # ✅ 1）优先用固定域名（优先级：参数 argoname > sbargoym.log）
-  if [ -n "$argoname" ]; then
-    argodomain="$argoname"
-  elif [ -s "$ym_log" ]; then
-    argodomain="$(tail -n1 "$ym_log" 2>/dev/null)"
+  # ✅ 规范化隧道类型
+  case "$argo_tunnel_type" in
+    固定|fixed|FIXED) argo_tunnel_type="固定" ;;
+    临时|temp|temporary|"") argo_tunnel_type="临时" ;;
+    *)
+      yellow "⚠️ 未知隧道类型：$argo_tunnel_type，按【临时】处理" >&2
+      argo_tunnel_type="临时"
+      ;;
+  esac
+
+  # ✅ 固定 Argo：域名只允许来自 ARGO_DOMAIN 或 sbargoym.log
+  if [ "$argo_tunnel_type" = "固定" ]; then
+    if [ -n "${ARGO_DOMAIN}" ]; then
+      argodomain="${ARGO_DOMAIN}"
+    elif [ -s "$ym_log" ]; then
+      argodomain="$(tail -n1 "$ym_log" 2>/dev/null | tr -d '\r\n')"
+    fi
+
+    # 简单校验：必须像域名（含点号）
+    if [ -n "$argodomain" ] && echo "$argodomain" | grep -q '\.'; then
+      export ARGO_DOMAIN="$argodomain"
+      echo "$ARGO_DOMAIN" > "$ym_log" 2>/dev/null
+      green "✅ 固定 Argo 域名：$ARGO_DOMAIN"
+      return 0
+    fi
+
+    red "❌ 固定 Argo 模式未获取到域名，请设置 ARGO_DOMAIN 或写入 $ym_log"
+    return 1
   fi
 
-  # 固定域名拿到了就直接返回
-  if [ -n "$argodomain" ]; then
-    export ARGO_DOMAIN="$argodomain"
-    echo "$ARGO_DOMAIN" > "$ym_log" 2>/dev/null
-    green "✅ Argo 域名：$ARGO_DOMAIN"
-    return 0
-  fi
-
-  # ✅ 2）否则走临时 Argo：从 argo.log 解析 trycloudflare 域名
+  # ✅ 临时 Argo：从 argo.log 提取 *.trycloudflare.com
   yellow "⏳ 正在等待临时 Argo 域名生成（trycloudflare.com）..."
-
-  while [ $i -lt $max_wait ]; do
+  while [ "$i" -lt "$max_wait" ]; do
     if [ -s "$argo_log" ]; then
-      argodomain="$(grep -aoE '[a-zA-Z0-9.-]+trycloudflare\.com' "$argo_log" 2>/dev/null | tail -n1)"
+      argodomain="$(grep -aoE '[a-zA-Z0-9.-]+\.trycloudflare\.com' "$argo_log" 2>/dev/null | tail -n1)"
       if [ -n "$argodomain" ]; then
         export ARGO_DOMAIN="$argodomain"
         echo "$ARGO_DOMAIN" > "$ym_log" 2>/dev/null
@@ -1290,12 +1304,11 @@ wait_and_check_argo() {
         return 0
       fi
     fi
-
     sleep 1
     i=$((i + 1))
   done
 
-  red "❌ 未能获取临时 Argo 域名（argo.log 未生成或 cloudflared 未启动成功）"
+  red "❌ 未能获取临时 Argo 域名（$argo_log 未生成或 cloudflared 未启动成功）"
   return 1
 }
 
@@ -1519,7 +1532,7 @@ ins(){
 
         # 2.4 启动 Argo（固定 / 临时）
         if [ -n "$ARGO_DOMAIN" ] && [ -n "$ARGO_AUTH" ]; then
-            argoname="固定"
+            argo_tunnel_type="固定"
 
             if pidof systemd >/dev/null 2>&1 && [ "$EUID" -eq 0 ]; then
                 install_argo_service_systemd "$ARGO_MODE" "$ARGO_AUTH"
@@ -1536,12 +1549,12 @@ ins(){
             [ "$ARGO_MODE" = "token" ] && echo "$ARGO_AUTH" > "$HOME/agsb/sbargotoken.log"
         else
             # 临时 Argo（trycloudflare）
-            argoname="临时"
+            argo_tunnel_type="临时"
             start_argo_no_daemon "temp" "" "$argoport"
         fi
 
         # 2.5 等待并检查 Argo 申请结果（原版 sleep + grep 逻辑）
-        wait_and_check_argo "$argoname"
+        wait_and_check_argo "$argo_tunnel_type"
     fi
 
     # =====================================================
