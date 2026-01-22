@@ -1557,7 +1557,7 @@ cip(){
     #argodomain=$(cat "$HOME/agsb/sbargoym.log" 2>/dev/null); [ -z "$argodomain" ] && argodomain=$(grep -a trycloudflare.com "$HOME/agsb/argo.log" 2>/dev/null | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}')
    
     argodomain=$(cat "$HOME/agsb/sbargoym.log" 2>/dev/null)
-    
+
     if need_argo && [ -z "$argodomain" ] && [ -s "$HOME/agsb/argo.log" ]; then
         argodomain=$(grep -aoE '[a-zA-Z0-9.-]+trycloudflare\.com' "$HOME/agsb/argo.log" 2>/dev/null | tail -n1)
     fi
@@ -1601,7 +1601,7 @@ cip(){
     if ! is_true "$(get_subscribe_flag)"; then
         purple "⛔ 未开启订阅"
     else
-        yellow "$(show_sub_url)"
+        green "$(show_sub_url)"
     fi
 
 
@@ -1806,7 +1806,8 @@ if [ "$1" = "sub" ]; then
     purple "⛔ 未开启订阅"
   else
     u="$(show_sub_url)"
-    echo -e "$u\n"
+    green "$u"
+    echo
   fi
 
   exit;
