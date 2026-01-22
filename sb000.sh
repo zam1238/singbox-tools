@@ -58,6 +58,8 @@ any_proto_enabled() {
     is_yes "$vlr" || is_yes "$vmp" || is_yes "$trp" || is_yes "$hyp" || is_yes "$tup"
 }
 
+need_argo() { [ "$argo" = "vmpt" ] || [ "$argo" = "trpt" ]; }
+
 # 已安装/未安装的参数规则检查
 if pgrep -f 'agsb/sing-box' >/dev/null 2>&1; then
     # 已安装
@@ -86,7 +88,7 @@ install_deps() {
     echo -e "${YELLOW}正在安装依赖...${RESET}"
 
     # =========================
-    # 依赖包（用数组，最稳）
+    # 依赖包（⚠️注意：nginx不要在这里暴力安装，因为不是所有场景都要安装nginx的）
     # =========================
     # 公共依赖（各发行版基本一致）
     local COMMON_PKGS=(
@@ -98,7 +100,7 @@ install_deps() {
         bc 
         lsof
         psmisc
-        nginx
+        
     )
 
     # Debian/Ubuntu
@@ -295,6 +297,41 @@ showmode(){
     yellow "Nginx相关：agsb nginx_start | nginx_stop | nginx_restart | nginx_status"
     echo "---------------------------------------------------------"
 }
+
+install_nginx_pkg() {
+  # 已安装就不重复装
+  if command -v nginx >/dev/null 2>&1; then
+    return 0
+  fi
+
+  yellow "👉 正在安装 Nginx..."
+
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -y >/dev/null 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nginx >/dev/null 2>&1 || return 1
+
+  elif command -v apt >/dev/null 2>&1; then
+    apt update -y >/dev/null 2>&1
+    DEBIAN_FRONTEND=noninteractive apt install -y nginx >/dev/null 2>&1 || return 1
+
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y nginx >/dev/null 2>&1 || return 1
+
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y nginx >/dev/null 2>&1 || return 1
+
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache nginx >/dev/null 2>&1 || return 1
+
+  else
+    red "❌ 无法安装 Nginx：不支持的包管理器"
+    return 1
+  fi
+
+  green "✅ Nginx 安装完成"
+  return 0
+}
+
 # ================== 处理tunnel的json ==================
 
 rand_port() {
@@ -778,31 +815,49 @@ nginx_status() {
 }
 
 
+ensure_cloudflared_if_needed() {
+  # ✅ 仅当启用 argo=vmpt/trpt 且 vmag 存在时才需要 cloudflared
+  if { [ "${argo:-}" != "vmpt" ] && [ "${argo:-}" != "trpt" ]; } || [ -z "${vmag:-}" ]; then
+    purple "ℹ️ 未启用 Argo（或未启用 vmess/trojan），跳过 cloudflared 下载/安装"
+    return 0
+  fi
+
+  ensure_cloudflared || return 1
+  return 0
+}
+
+
+
 
 ensure_cloudflared() {
-    if [ -x "$HOME/agsb/cloudflared" ]; then
-        return
-    fi
+  # 已存在就不重复下载
+  if [ -x "$HOME/agsb/cloudflared" ]; then
+    return 0
+  fi
 
-    echo "下载 Cloudflared Argo 内核中…"
-    # 下面为备用链接，里面的版本为2025.11.1，当有latest问题在切回我的仓库去
-     # url="https://github.com/jyucoeng/singbox-tools/releases/download/cloudflared/cloudflared-linux-$cpu";
+  yellow "下载 Cloudflared Argo 内核中…"
+  local url out
 
-    url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$cpu"
-    out="$HOME/agsb/cloudflared"
-
-    (curl -Lo "$out" -# --connect-timeout 5 --max-time 120 \
-      --retry 2 --retry-delay 2 --retry-all-errors "$url") \
-|| (wget -O "$out" --tries=2 --timeout=60 --dns-timeout=5 --read-timeout=60 "$url")
-
-    if [ ! -s "$out" ]; then
-        red "❌ 下载失败：文件为空 $out"
-        exit 1
-    fi
+  # 下面为备用链接，里面的版本为2025.11.1，当有latest问题在切回我的仓库去
+  # url="https://github.com/jyucoeng/singbox-tools/releases/download/cloudflared/cloudflared-linux-$cpu";
 
 
-    chmod +x "$out"
+  url="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$cpu"
+  out="$HOME/agsb/cloudflared"
+
+  (curl -Lo "$out" -# --connect-timeout 5 --max-time 120 \
+    --retry 2 --retry-delay 2 --retry-all-errors "$url") \
+  || (wget -O "$out" --tries=2 --timeout=60 --dns-timeout=5 --read-timeout=60 "$url")
+
+  if [ ! -s "$out" ]; then
+    red "❌ 下载失败：文件为空 $out"
+    return 1
+  fi
+
+  chmod +x "$out" || return 1
+  return 0
 }
+
 
 
 install_argo_service_systemd() {
@@ -923,32 +978,54 @@ start_argo_no_daemon() {
 
 
 wait_and_check_argo() {
-    local argoname="$1"
-    local argodomain=""
+  local argoname="$1"   # 固定域名（如果有）
+  local argo_log="$HOME/agsb/argo.log"
+  local ym_log="$HOME/agsb/sbargoym.log"
+  local argodomain=""
+  local i=0
+  local max_wait=25
 
-    yellow "申请Argo${argoname}隧道中……请稍等"
-    sleep 8
+  # ✅ 没启用 argo：直接跳过（这是你想要的“压根不需要 argo 的场景”）
+ if ! need_argo; then
+    purple "ℹ️ 未启用 Argo，跳过 Argo 域名检查"
+    return 0
+  fi
 
-    if [ -n "${ARGO_DOMAIN}" ] && [ -n "${ARGO_AUTH}" ]; then
-        # 固定 Argo：直接读取保存的域名
-        argodomain=$(cat "$HOME/agsb/sbargoym.log" 2>/dev/null)
-    else
-        # 临时 Argo：从日志中解析 trycloudflare 域名
-        #argodomain=$(grep -a trycloudflare.com "$HOME/agsb/argo.log" 2>/dev/null  | awk 'NR==2{print}' | awk -F// '{print $2}' | awk '{print $1}')
-       
-       # 临时 Argo：从日志中解析 trycloudflare 域名
-        if [ -s "$HOME/agsb/argo.log" ]; then
-            argodomain=$(grep -aoE '[a-zA-Z0-9.-]+trycloudflare\.com' "$HOME/agsb/argo.log" 2>/dev/null | tail -n1)
-        else
-            argodomain=""
-        fi
+  # ✅ 1）优先用固定域名（优先级：参数 argoname > sbargoym.log）
+  if [ -n "$argoname" ]; then
+    argodomain="$argoname"
+  elif [ -s "$ym_log" ]; then
+    argodomain="$(tail -n1 "$ym_log" 2>/dev/null)"
+  fi
+
+  # 固定域名拿到了就直接返回
+  if [ -n "$argodomain" ]; then
+    export ARGO_DOMAIN="$argodomain"
+    echo "$ARGO_DOMAIN" > "$ym_log" 2>/dev/null
+    green "✅ Argo 域名：$ARGO_DOMAIN"
+    return 0
+  fi
+
+  # ✅ 2）否则走临时 Argo：从 argo.log 解析 trycloudflare 域名
+  yellow "⏳ 正在等待临时 Argo 域名生成（trycloudflare.com）..."
+
+  while [ $i -lt $max_wait ]; do
+    if [ -s "$argo_log" ]; then
+      argodomain="$(grep -aoE '[a-zA-Z0-9.-]+trycloudflare\.com' "$argo_log" 2>/dev/null | tail -n1)"
+      if [ -n "$argodomain" ]; then
+        export ARGO_DOMAIN="$argodomain"
+        echo "$ARGO_DOMAIN" > "$ym_log" 2>/dev/null
+        green "✅ 临时 Argo 域名：$ARGO_DOMAIN"
+        return 0
+      fi
     fi
 
-    if [ -n "${argodomain}" ]; then
-        green "Argo${argoname}隧道申请成功"
-    else
-        purple "Argo${argoname}隧道申请失败"
-    fi
+    sleep 1
+    i=$((i + 1))
+  done
+
+  red "❌ 未能获取临时 Argo 域名（argo.log 未生成或 cloudflared 未启动成功）"
+  return 1
 }
 
 
@@ -956,7 +1033,7 @@ wait_and_check_argo() {
 # 开机自启argo
 append_argo_cron_legacy() {
     # 只在启用了 argo + vmag 的情况下处理
-    if [ -z "$argo" ] || [ -z "$vmag" ]; then
+    if ! need_argo || [ -z "$vmag" ]; then
         return
     fi
 
@@ -1082,6 +1159,46 @@ EOF
 }
 
 
+ensure_nginx_if_needed() {
+  # ✅ 需要 Nginx 的条件：
+  # 1) 订阅开启 subscribe=true
+  # 2) 启用 argo（vmpt/trpt）
+  local need_nginx=false
+
+  if is_true "$(get_subscribe_flag)"; then
+    need_nginx=true
+  fi
+
+  if need_argo; then
+    need_nginx=true
+  fi
+
+  # ✅ 不需要 nginx：既不安装，也不启动
+  if ! $need_nginx; then
+    purple "ℹ️ subscribe 未开启且未启用 Argo，跳过 Nginx 安装/配置/启动"
+    return 0
+  fi
+
+  # ✅ 需要 nginx：先按需安装
+  install_nginx_pkg || {
+    red "❌ Nginx 安装失败"
+    return 1
+  }
+
+  # ✅ 需要 nginx：生成配置（你原来的逻辑）
+  setup_nginx_subscribe || return 1
+
+  # ✅ 只有订阅开启时才清空/准备 sub.txt
+  if is_true "$(get_subscribe_flag)"; then
+    : > /var/www/agsb/sub.txt
+  fi
+
+  # ✅ 启动 nginx
+  start_nginx_service
+  return 0
+}
+
+
 
 
 ins(){
@@ -1092,22 +1209,23 @@ ins(){
     set_sbyx
     sbbout
 
-    # 订阅服务：生成订阅文件 + 启动 nginx
-    setup_nginx_subscribe || exit 1
-    is_true "$(get_subscribe_flag)" && : > /var/www/agsb/sub.txt
-
-    start_nginx_service
+    # 2. Nginx（按需：subscribe=true 或启用 argo 才需要）
+   ensure_nginx_if_needed || exit 1
 
 
     # =====================================================
     # 2. Argo 相关逻辑（仅在启用 argo + vmag 时）
     # =====================================================
-   if { [ "$argo" = "vmpt" ] || [ "$argo" = "trpt" ]; } && [ -n "$vmag" ]; then
+   if need_argo && [ -n "$vmag" ]; then
         echo
         echo "=========启用Cloudflared-argo内核========="
 
-        # 2.1 确保 cloudflared 内核存在
-        ensure_cloudflared
+    
+        # ✅ 3.1 仅在需要 argo 时才确保 cloudflared 存在
+        ensure_cloudflared_if_needed || {
+            red "❌ 已启用 Argo，但 cloudflared 准备失败，无法继续启用 Argo"
+            exit 1
+        }
 
          # 2.2 计算 Argo 本地端口
         argoport="${argo_pt:-$ARGO_DEFAULT_PORT}"
@@ -1183,28 +1301,98 @@ write2AgsbFolders(){
 
 #   show status
 agsbstatus() {
-    purple "=========当前内核运行状态========="
+  purple "=========当前内核运行状态========="
 
-    if pgrep -f "$HOME/agsb/sing-box" >/dev/null 2>&1; then
-        singbox_version=$("$HOME/agsb/sing-box" version 2>/dev/null | sed -n 's/.*r\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
-        echo "Sing-box (版本V${singbox_version:-unknown})：$(green "运行中")"
-    else
-        echo "Sing-box：$(red "未运行")"
-    fi
+  # 1) sing-box
+  if pgrep -f "$HOME/agsb/sing-box" >/dev/null 2>&1; then
+    # 兼容：sing-box version r1.12.13
+    local singbox_version
+    singbox_version=$("$HOME/agsb/sing-box" version 2>/dev/null | sed -n 's/.*r\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+    echo "Sing-box (版本V${singbox_version:-unknown})：✅ $(green "运行中")"
+  else
+    echo "Sing-box：❌ $(red "未运行")"
+  fi
 
+  # ========= 统一判断：订阅/Argo/Nginx 是否“需要” =========
+  local subscribe_flag argo_needed nginx_needed
+  subscribe_flag="$(get_subscribe_flag)"
+
+  # Argo 是否需要（用 need_argo 函数）
+  argo_needed=false
+  if need_argo; then
+    argo_needed=true
+  fi
+
+  # Nginx 是否需要：订阅开启 或 需要 Argo
+  nginx_needed=false
+  if is_true "$subscribe_flag" || $argo_needed; then
+    nginx_needed=true
+  fi
+
+  # ✅ cloudflared 安装状态（不影响 Argo 是否启用）
+  if [ -x "$HOME/agsb/cloudflared" ] || command -v cloudflared >/dev/null 2>&1; then
+    echo "cloudflared：✅ $(green "已安装")"
+  else
+    echo "cloudflared：❌ $(red "未安装")"
+  fi
+
+  # 2) Argo 状态（细分：不需要 / 需要但未运行 / 运行中）
+  if ! $argo_needed; then
+    echo "Argo：⛔ $(purple "未启用")（当前场景无需 Argo）"
+  else
     if pgrep -f "$HOME/agsb/cloudflared" >/dev/null 2>&1; then
-        cloudflared_version=$("$HOME/agsb/cloudflared" version 2>/dev/null | sed -n 's/.*\([0-9]\{4\}\.[0-9]\+\.[0-9]\+\).*/\1/p')
-        echo "cloudflared Argo (版本V${cloudflared_version:-unknown})：$(green "运行中")"
+      # 兼容：cloudflared version 2025.11.1
+      local cloudflared_version
+      cloudflared_version=$("$HOME/agsb/cloudflared" version 2>/dev/null | sed -n 's/.*version \([0-9]\{4\}\.[0-9]\+\.[0-9]\+\).*/\1/p')
+      echo "cloudflared Argo (版本V${cloudflared_version:-unknown})：✅ $(green "运行中")"
     else
-        echo "Argo：$(red "未运行")"
+      echo "Argo：❌ $(red "未运行")（已启用 Argo）"
+      yellow "⚠️ 已启用 Argo，但 cloudflared 未运行：请执行 agsb start 或检查 cloudflared"
     fi
+  fi
 
-    if pgrep -x nginx >/dev/null 2>&1; then
-        echo "Nginx：$(green "运行中")"
-    else
-        echo "Nginx：$(red "未运行")"
+  # 3) Nginx + subscribe 状态（细分：不需要 / 未安装 / 未运行 / 运行中）
+  local nginx_port sub_desc
+  nginx_port="${nginx_pt:-$NGINX_DEFAULT_PORT}"
+  [ -s "$HOME/agsb/nginx_port" ] && nginx_port="$(cat "$HOME/agsb/nginx_port" 2>/dev/null)"
+
+  if is_true "$subscribe_flag"; then
+    sub_desc="✅ $(green "订阅已开启")"
+  else
+    sub_desc="⛔ $(purple "订阅未开启")"
+  fi
+
+  # ✅ 不需要 nginx 的场景：明确说明（既不安装也不启动）
+  if ! $nginx_needed; then
+    echo "Nginx：⛔ $(purple "未安装/未启用")（符合 subscribe=false 且未启用 Argo）"
+    return 0
+  fi
+
+  # ✅ 需要 nginx：进一步区分未安装/未运行/运行中
+  if ! command -v nginx >/dev/null 2>&1; then
+    echo "Nginx：❌ $(red "未安装")（${sub_desc}，端口：${nginx_port}）"
+    if is_true "$subscribe_flag"; then
+      yellow "⚠️ 订阅已开启，但系统未安装 Nginx：请重新执行安装或手动安装 nginx"
     fi
+    if $argo_needed; then
+      yellow "⚠️ 已启用 Argo，但系统未安装 Nginx：cloudflared 回源将无法工作"
+    fi
+    return 0
+  fi
+
+  if pgrep -x nginx >/dev/null 2>&1; then
+    echo "Nginx：✅ $(green "运行中")（${sub_desc}，端口：${nginx_port}）"
+  else
+    echo "Nginx：❌ $(red "未运行")（${sub_desc}，端口：${nginx_port}）"
+    if is_true "$subscribe_flag"; then
+      yellow "⚠️ 订阅已开启，但 Nginx 未运行：请执行 agsb start 或重启 nginx"
+    fi
+    if $argo_needed; then
+      yellow "⚠️ 已启用 Argo，但 Nginx 未运行：cloudflared 回源将无法工作"
+    fi
+  fi
 }
+
 
 
 # ================== 订阅：生成订阅内容 ==================
