@@ -1,6 +1,9 @@
 #  singbox 一键安装脚本（可选nginx订阅与argo）
 # 1、 singbox 安装以及卸载
-## singbox 一键安装脚本（4协议，vmess argo/trojan argo +hy2+vless-Reality+tuic，这些协议可自由组合）（举🌰说明：）
+## singbox 一键安装脚本（4协议，vmess argo/trojan argo +hy2+vless-Reality+tuic，这些协议可自由组合）
+cloudflared和nginx 用不到的时候就不会下载，只有配置了相关参数才会自动下载和启动
+
+举🌰说明：
 
 
 ```bash
